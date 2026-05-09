@@ -58,7 +58,9 @@ else
         log_info "(можно зафиксировать через XRAY_INSTALLER_SHA256=...)"
     fi
 
-    bash "$INSTALLER_PATH" @ install -u "$XRAY_USER" >/dev/null
+    # Без '@' перед 'install' — это placeholder для $0 в форме bash -c "$script" @ install,
+    # а у нас bash <file> install: install сразу становится $1, как и ожидает парсер XTLS.
+    bash "$INSTALLER_PATH" install -u "$XRAY_USER" >/dev/null
 
     if ! command -v xray >/dev/null 2>&1; then
         log_error "xray не установился"
