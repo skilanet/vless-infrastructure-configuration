@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 #
-# install-real.sh — главный оркестратор xray-vpn-stack.
+# install-real.sh — главный оркестратор vless-infrastructure-configuration.
 #
 # Поддерживает:
 # - checkpoints (отметки о выполненных модулях)
 # - hash файлов модулей (auto-rerun при изменении кода)
 # - команды: install, --status, --reset, --rerun MODULE
 #
-# State хранится в /var/lib/xray-vpn-stack/:
+# State хранится в /var/lib/vless-infrastructure-configuration/:
 #   state.env              — переменные от prompts
 #   checkpoints/01-prompts — пустой файл-маркер выполнения, имя = модуль без .sh
 #   checkpoints.hash       — sha256 модулей на момент чекпоинта
@@ -21,7 +21,7 @@ SCRIPTS_DIR="$SCRIPT_DIR/scripts"
 CONFIGS_DIR="$SCRIPT_DIR/configs"
 
 # === Persistent state ===
-STATE_DIR="/var/lib/xray-vpn-stack"
+STATE_DIR="/var/lib/vless-infrastructure-configuration"
 STATE_FILE="$STATE_DIR/state.env"
 CHECKPOINT_DIR="$STATE_DIR/checkpoints"
 HASH_FILE="$STATE_DIR/checkpoints.hash"

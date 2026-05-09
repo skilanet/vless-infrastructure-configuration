@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# install.sh — bootstrap для xray-vpn-stack
+# install.sh — bootstrap для vless-infrastructure-configuration
 #
 # Использование:
 #   sudo bash install.sh [команда] [опции]
@@ -10,14 +10,14 @@
 #   --reset                 — сбросить все checkpoint'ы и начать заново
 #   --rerun MODULE          — пересобрать конкретный модуль (например --rerun 14-xray-install)
 #   --status                — показать статус выполненных модулей
-#   --update                — git pull в /opt/xray-vpn-stack
+#   --update                — git pull в /opt/vless-infrastructure-configuration
 #   --help                  — эта справка
 
 set -euo pipefail
 
-REPO_URL="${XRAY_VPN_REPO:-https://github.com/skilanet/xray-vpn-stack.git}"
+REPO_URL="${XRAY_VPN_REPO:-https://github.com/skilanet/vless-infrastructure-configuration.git}"
 REPO_BRANCH="${XRAY_VPN_BRANCH:-main}"
-INSTALL_DIR="/opt/xray-vpn-stack"
+INSTALL_DIR="/opt/vless-infrastructure-configuration"
 
 # === Цвета ===
 if [[ -t 1 ]]; then
