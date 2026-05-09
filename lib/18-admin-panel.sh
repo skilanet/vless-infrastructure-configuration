@@ -119,6 +119,12 @@ PYEOF
 
 chown "$PANEL_USER:$PANEL_USER" "$PANEL_CONFIG"
 chmod 600 "$PANEL_CONFIG"
+
+# Директория должна быть проходимой для panel-юзера, иначе он не дотянется
+# до config.json (даже если он его owner). root:panel + 750 даёт юзеру
+# rx через группу, но не write — добавлять/удалять файлы по-прежнему может
+# только root.
+chown "root:$PANEL_USER" /etc/xray-admin
 chmod 750 /etc/xray-admin
 
 # Пароль больше не нужен — затираем переменную.
