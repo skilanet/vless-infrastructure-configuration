@@ -164,7 +164,10 @@ fi
 log "${BOLD}Генерация подписок${RESET}"
 
 # Очищаем старые файлы подписок
-rm -f "$SUBS_DIR"/*.txt "$SUBS_DIR"/*.b64 2>/dev/null || true
+shopt -s nullglob
+old=( "$SUBS_DIR"/*.txt "$SUBS_DIR"/*.b64 )
+shopt -u nullglob
+[[ ${#old[@]} -gt 0 ]] && rm -f -- "${old[@]}"
 
 bash "$GEN_SCRIPT" \
     -c "$XRAY_CONFIG" \
@@ -172,12 +175,21 @@ bash "$GEN_SCRIPT" \
     --subs "$SUBS_DIR" \
     "$PUBLIC_KEY" > /dev/null
 
-if [[ -z "$(ls -A "$SUBS_DIR"/*.txt 2>/dev/null)" ]]; then
+# Собираем имена клиентов через nullglob+mapfile — устойчиво к пробелам в именах
+shopt -s nullglob
+sub_files=("$SUBS_DIR"/*.txt)
+shopt -u nullglob
+
+if [[ ${#sub_files[@]} -eq 0 ]]; then
     err "gen-vless-links.sh не создал подписочных файлов"
     exit 1
 fi
 
-CLIENTS=($(ls "$SUBS_DIR"/*.txt | xargs -n1 basename | sed 's/\.txt$//'))
+CLIENTS=()
+for f in "${sub_files[@]}"; do
+    name=$(basename "$f" .txt)
+    CLIENTS+=("$name")
+done
 ok "сгенерено подписок: ${#CLIENTS[@]}"
 
 if $DRY_RUN; then

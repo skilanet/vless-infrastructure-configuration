@@ -48,6 +48,16 @@ if [[ -d /usr/local/etc/xray/conf.d ]]; then
     fi
 fi
 
+# === Затираем секреты из state.env ===
+# PANEL_PASSWORD нужен был только для модуля 18-admin-panel.sh.
+# Сейчас он уже захэширован и сохранён в /etc/xray-admin/config.json,
+# поэтому держать его на диске больше нечего.
+if [[ -f "$STATE_FILE" ]] && grep -q "^export PANEL_PASSWORD=" "$STATE_FILE"; then
+    sed -i '/^export PANEL_PASSWORD=/d' "$STATE_FILE"
+    log_ok "PANEL_PASSWORD удалён из state.env"
+fi
+chmod 600 "$STATE_FILE" 2>/dev/null || true
+
 log_ok "финализация завершена"
 
 # === Сохраняем итоговый отчёт ===

@@ -17,12 +17,14 @@ if ! command -v fail2ban-server >/dev/null 2>&1; then
     DEBIAN_FRONTEND=noninteractive apt-get install -y -qq fail2ban
 fi
 
-# Конфиг для SSH
+# Конфиг для SSH.
+# backend=systemd читает journald напрямую; logpath с ним конфликтует и
+# на современных Debian/Ubuntu /var/log/auth.log может вообще отсутствовать
+# (journald-only). Поэтому только backend=systemd.
 cat > /etc/fail2ban/jail.d/sshd.conf <<EOF
 [sshd]
 enabled = true
 port = $SSH_PORT
-logpath = /var/log/auth.log
 backend = systemd
 maxretry = 3
 findtime = 600

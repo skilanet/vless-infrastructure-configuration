@@ -26,15 +26,22 @@ else
     BOLD=""; DIM=""; RED=""; GREEN=""; YELLOW=""; BLUE=""; CYAN=""; GRAY=""; RESET=""
 fi
 
+# Безопасное приведение к числу: если входная строка пуста, не число
+# или содержит мусор, возвращаем 0. Иначе awk упадёт с syntax error.
+to_number() {
+    local v=$1
+    if [[ "$v" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
+        printf '%s' "$v"
+    else
+        printf '0'
+    fi
+}
+
 # === Хелперы для статусов ===
-# arg1: значение, arg2: warn-порог, arg3: crit-порог, arg4: метка нормы
-# возвращает строку "STATUS_LABEL" с цветом
 status_str() {
-    local val=$1
-    local warn=$2
-    local crit=$3
-    local norm_label=$4
-    # сравнение чисел через awk (чтобы поддержать дробные)
+    local val; val=$(to_number "$1")
+    local warn; warn=$(to_number "$2")
+    local crit; crit=$(to_number "$3")
     if awk "BEGIN{exit !($val >= $crit)}"; then
         printf "${RED}${BOLD}CRITICAL${RESET}"
     elif awk "BEGIN{exit !($val >= $warn)}"; then
@@ -48,12 +55,12 @@ status_str() {
 # args: name, value, unit, warn, crit
 metric() {
     local name=$1
-    local value=$2
+    local value; value=$(to_number "$2")
     local unit=$3
     local warn=$4
     local crit=$5
 
-    local status=$(status_str "$value" "$warn" "$crit" "OK")
+    local status; status=$(status_str "$value" "$warn" "$crit" "OK")
 
     # форматируем значение
     local val_fmt
@@ -90,10 +97,10 @@ if [[ -z "$PID" ]]; then
 fi
 
 # ресурсы xray
-FD=$(ls /proc/$PID/fd 2>/dev/null | wc -l)
-MEM_KB=$(awk '/VmRSS:/ {print $2}' /proc/$PID/status 2>/dev/null)
+FD=$(ls "/proc/$PID/fd" 2>/dev/null | wc -l)
+MEM_KB=$(awk '/VmRSS:/ {print $2}' "/proc/$PID/status" 2>/dev/null)
 MEM_MB=$(( ${MEM_KB:-0} / 1024 ))
-CPU=$(ps -o %cpu= -p $PID 2>/dev/null | tr -d ' ')
+CPU=$(ps -o %cpu= -p "$PID" 2>/dev/null | tr -d ' ')
 CPU=${CPU:-0}
 
 # uptime сервиса
@@ -109,16 +116,27 @@ else
     UPTIME_FMT="—"
 fi
 
-# соединения
-EST=$(ss -tn state established 2>/dev/null | tail -n +2 | wc -l)
-SYN_RECV=$(ss -tn state syn-recv 2>/dev/null | tail -n +2 | wc -l)
-TIME_WAIT=$(ss -tn state time-wait 2>/dev/null | tail -n +2 | wc -l)
-CLOSE_WAIT=$(ss -tn state close-wait 2>/dev/null | tail -n +2 | wc -l)
+# соединения (-H убирает заголовок, без хака с tail/wc-1)
+EST=$(ss -Htn state established 2>/dev/null | wc -l)
+SYN_RECV=$(ss -Htn state syn-recv 2>/dev/null | wc -l)
+TIME_WAIT=$(ss -Htn state time-wait 2>/dev/null | wc -l)
+CLOSE_WAIT=$(ss -Htn state close-wait 2>/dev/null | wc -l)
 
 # хост
 LOAD1=$(awk '{print $1}' /proc/loadavg)
-STEAL=$(top -bn1 | awk '/%Cpu/{print $16}' | tr -d ',' | head -1)
-STEAL=${STEAL:-0}
+
+# steal % через /proc/stat — не зависит от версии top и от локали
+read -r _ user1 nice1 sys1 idle1 iowait1 irq1 softirq1 steal1 _ < /proc/stat
+sleep 1
+read -r _ user2 nice2 sys2 idle2 iowait2 irq2 softirq2 steal2 _ < /proc/stat
+total_delta=$(( (user2+nice2+sys2+idle2+iowait2+irq2+softirq2+steal2) -
+                (user1+nice1+sys1+idle1+iowait1+irq1+softirq1+steal1) ))
+steal_delta=$(( steal2 - steal1 ))
+if (( total_delta > 0 )); then
+    STEAL=$(awk -v s="$steal_delta" -v t="$total_delta" 'BEGIN{printf "%.1f", (s/t)*100}')
+else
+    STEAL=0
+fi
 RAM_FREE=$(free -h | awk 'NR==2 {print $7}')
 RAM_USED_PCT=$(free | awk 'NR==2 {printf "%.0f", ($3/$2)*100}')
 

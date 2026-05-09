@@ -211,9 +211,9 @@ ${BOLD}SSH:${RESET}
   Root login:      ${RED}отключается${RESET}
 
 ${BOLD}Админ-панель:${RESET}
-  Порт:            ${GREEN}$PANEL_PORT${RESET}
+  Bind:            ${GREEN}${PANEL_BIND:-127.0.0.1}:$PANEL_PORT${RESET}
   Логин:           ${GREEN}$PANEL_LOGIN${RESET}
-  Пароль:          ${GREEN}*****${RESET} (сохранён)
+  Пароль:          ${GREEN}*****${RESET} (захэширован)
 
 ${BOLD}xray:${RESET}
   Установка:       ${GREEN}xray-core от XTLS${RESET}
@@ -242,15 +242,23 @@ ${BOLD}Сервер:${RESET}
   SSH:              ${CYAN}ssh -p $SSH_PORT $ADMIN_USER@$server_ip${RESET}
 
 ${BOLD}Админ-панель:${RESET}
-  URL:              ${CYAN}http://$server_ip:$PANEL_PORT${RESET}
+  Bind:             ${CYAN}${PANEL_BIND:-127.0.0.1}:$PANEL_PORT${RESET}
   Логин:            ${CYAN}$PANEL_LOGIN${RESET}
   Пароль:           тот что ввёл при установке
 
-  ${YELLOW}⚠  Панель работает по HTTP. Для безопасности либо:${RESET}
-  ${YELLOW}    - не открывай порт публично, ходи через SSH-туннель:${RESET}
+$(if [[ "${PANEL_BIND:-127.0.0.1}" == "127.0.0.1" ]]; then cat <<EOL
+  Панель слушает только на 127.0.0.1 — снаружи недоступна.
+  Доступ через SSH-туннель:
+    ${CYAN}ssh -p $SSH_PORT -L 8088:localhost:$PANEL_PORT $ADMIN_USER@$server_ip${RESET}
+  потом открой ${CYAN}http://localhost:8088${RESET} в браузере.
+EOL
+else cat <<EOL
+  ${YELLOW}⚠  Панель открыта на 0.0.0.0 по HTTP — без TLS!${RESET}
+  ${YELLOW}    Поставь reverse-proxy с TLS (caddy/nginx) или закрой UFW${RESET}
+  ${YELLOW}    и ходи через SSH-туннель:${RESET}
   ${YELLOW}      ssh -p $SSH_PORT -L 8088:localhost:$PANEL_PORT $ADMIN_USER@$server_ip${RESET}
-  ${YELLOW}      потом открой http://localhost:8088 в браузере${RESET}
-  ${YELLOW}    - или используй Tailscale для приватной сети${RESET}
+EOL
+fi)
 
 ${BOLD}Что дальше:${RESET}
 

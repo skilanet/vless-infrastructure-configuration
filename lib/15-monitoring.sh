@@ -42,19 +42,17 @@ mkdir -p /var/log/xray-monitor
 chmod 755 /var/log/xray-monitor
 
 # === Cron для метрик каждые 5 минут ===
-if [[ -f /etc/cron.d/xray-metrics ]]; then
-    log_info "cron для метрик уже установлен"
-else
-    cat > /etc/cron.d/xray-metrics <<EOF
+# Всегда перезаписываем — иначе после изменения скрипта/расписания на rerun
+# пользователь будет ловить устаревший cron.
+cat > /etc/cron.d/xray-metrics <<EOF
 # Сбор метрик xray каждые 5 минут
 SHELL=/bin/bash
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
 */5 * * * * root /usr/local/sbin/xray-metrics.sh
 EOF
-    chmod 644 /etc/cron.d/xray-metrics
-    log_ok "cron для метрик установлен (каждые 5 минут)"
-fi
+chmod 644 /etc/cron.d/xray-metrics
+log_ok "cron для метрик установлен (каждые 5 минут)"
 
 # === Logrotate ===
 log_info "настраиваю logrotate..."
@@ -64,22 +62,37 @@ chmod 644 /etc/logrotate.d/xray /etc/logrotate.d/xray-monitor
 log_ok "logrotate настроен"
 
 # === Алиасы для удобства ===
-log_info "добавляю алиасы для $ADMIN_USER..."
+# Управляемый блок: при rerun вырезаем старый блок целиком и вставляем
+# свежий. Так список алиасов всегда соответствует тому, что в этом модуле.
+log_info "обновляю алиасы для $ADMIN_USER..."
 
 bashrc="/home/$ADMIN_USER/.bashrc"
-aliases_block="
-# === vless-infrastructure-configuration aliases ===
+BEGIN_MARKER="# >>> vless-infrastructure-configuration aliases >>>"
+END_MARKER="# <<< vless-infrastructure-configuration aliases <<<"
+
+if [[ -f "$bashrc" ]]; then
+    # Удаляем старый блок (если есть) — между маркерами включительно.
+    # Плюс старый формат "=== vless-...aliases ===" из ранних версий,
+    # чтобы не оставались дубликаты.
+    sed -i \
+        -e "/^$BEGIN_MARKER\$/,/^$END_MARKER\$/d" \
+        -e '/^# === vless-infrastructure-configuration aliases ===$/,/^$/d' \
+        "$bashrc"
+
+    {
+        printf '\n%s\n' "$BEGIN_MARKER"
+        cat <<'ALIASES'
 alias xstat='sudo /usr/local/sbin/xray-health.sh'
 alias xwatch='watch -c -n 5 sudo /usr/local/sbin/xray-health.sh'
 alias xlogs='sudo tail -f /var/log/xray/access.log'
 alias xerr='sudo tail -f /var/log/xray/error.log'
 alias xmetrics='sudo tail -f /var/log/xray-monitor/metrics.log'
-"
+ALIASES
+        printf '%s\n' "$END_MARKER"
+    } >> "$bashrc"
 
-if [[ -f "$bashrc" ]] && ! grep -q "vless-infrastructure-configuration aliases" "$bashrc"; then
-    echo "$aliases_block" >> "$bashrc"
     chown "$ADMIN_USER:$ADMIN_USER" "$bashrc"
-    log_ok "алиасы добавлены"
+    log_ok "алиасы обновлены"
 fi
 
 # === Первый запуск xray-metrics для теста ===

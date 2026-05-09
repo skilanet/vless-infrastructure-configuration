@@ -29,7 +29,15 @@ LOG_DIR="$STATE_DIR/logs"
 INSTALL_LOG="$LOG_DIR/install.log"
 
 mkdir -p "$STATE_DIR" "$CHECKPOINT_DIR" "$LOG_DIR"
-chmod 700 "$STATE_DIR"
+chmod 700 "$STATE_DIR" "$CHECKPOINT_DIR" "$LOG_DIR"
+
+# state.env содержит секреты (PANEL_PASSWORD до его очистки финализатором) —
+# создаём заранее с правильными правами
+if [[ ! -f "$STATE_FILE" ]]; then
+    install -m 600 /dev/null "$STATE_FILE"
+else
+    chmod 600 "$STATE_FILE"
+fi
 
 # Подключаем общие функции
 source "$LIB_DIR/common.sh"
@@ -59,8 +67,12 @@ checkpoint_name() {
 }
 
 module_hash() {
-    # SHA256 первых 16 символов
-    sha256sum "$LIB_DIR/$1" | awk '{print substr($1, 1, 16)}'
+    # SHA256 модуля + common.sh (изменения общих хелперов тоже инвалидируют чекпоинт).
+    # Берём первые 16 символов агрегированного хеша.
+    {
+        sha256sum "$LIB_DIR/$1"
+        sha256sum "$LIB_DIR/common.sh"
+    } | sha256sum | awk '{print substr($1, 1, 16)}'
 }
 
 is_completed() {

@@ -60,9 +60,14 @@ if [[ $EUID -ne 0 ]]; then
     exit 1
 fi
 
-# Команды которым не нужен интерактив
-NON_INTERACTIVE_COMMANDS="--status status --update update --help help --reset reset"
-if [[ ! -t 0 ]] && [[ ! " $NON_INTERACTIVE_COMMANDS " =~ " $COMMAND " ]]; then
+# Команды, которым не нужен интерактивный stdin
+needs_tty=true
+case "$COMMAND" in
+    --status|status|--update|update|--help|-h|help|--reset|reset)
+        needs_tty=false ;;
+esac
+
+if $needs_tty && [[ ! -t 0 ]]; then
     err "stdin не подключен к терминалу — установка интерактивная"
     err "запусти так:  sudo bash <(curl -fsSL <URL>)"
     err "  или сначала скачай: curl -fsSL <URL> -o install.sh && sudo bash install.sh"

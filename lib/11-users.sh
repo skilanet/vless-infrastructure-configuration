@@ -34,10 +34,14 @@ if [[ -n "${SSH_PUBLIC_KEY:-}" ]]; then
     mkdir -p "$ssh_dir"
     chmod 700 "$ssh_dir"
 
-    if [[ -f "$auth_keys" ]] && grep -qF "$SSH_PUBLIC_KEY" "$auth_keys"; then
+    if [[ -f "$auth_keys" ]] && grep -qxF "$SSH_PUBLIC_KEY" "$auth_keys"; then
         log_info "ssh-ключ уже в authorized_keys"
     else
-        echo "$SSH_PUBLIC_KEY" >> "$auth_keys"
+        # гарантируем перевод строки перед добавлением
+        if [[ -s "$auth_keys" ]] && [[ -n "$(tail -c1 "$auth_keys")" ]]; then
+            printf '\n' >> "$auth_keys"
+        fi
+        printf '%s\n' "$SSH_PUBLIC_KEY" >> "$auth_keys"
         log_ok "ssh-ключ добавлен в authorized_keys"
     fi
 
@@ -73,26 +77,29 @@ if ! id -nG "$PANEL_USER" | grep -qw "$XRAY_USER"; then
 fi
 
 # === Sudoers для админа ===
+#
+# ADMIN_USER уже в группе sudo и может стать root по паролю — здесь
+# только NOPASSWD-исключения для удобства (алиасы xstat/xwatch и т.п.).
+#
+# ВАЖНО: никаких glob-аргументов с '*' — sudo-wildcard это не fnmatch и
+# легко обходится через '../'. Никаких 'find', потому что у find есть
+# -exec и это приводит к мгновенной эскалации до root.
 sudoers_admin="/etc/sudoers.d/$ADMIN_USER-xray-tools"
 cat > "$sudoers_admin" <<EOF
-# Разрешения для $ADMIN_USER на чтение xray-конфигов и управление сервисом
-
-$ADMIN_USER ALL=(root) NOPASSWD: /usr/bin/cat /usr/local/etc/xray/conf.d/*
-$ADMIN_USER ALL=(root) NOPASSWD: /usr/bin/find /usr/local/etc/xray/conf.d *
-$ADMIN_USER ALL=(root) NOPASSWD: /usr/bin/ls /proc/*/fd
-$ADMIN_USER ALL=(root) NOPASSWD: /usr/bin/test -e *
-$ADMIN_USER ALL=(root) NOPASSWD: /usr/bin/test -d *
-$ADMIN_USER ALL=(root) NOPASSWD: /usr/bin/test -f *
-
+# Управление сервисами xray и админ-панели
 $ADMIN_USER ALL=(root) NOPASSWD: /bin/systemctl restart xray
 $ADMIN_USER ALL=(root) NOPASSWD: /bin/systemctl reload xray
 $ADMIN_USER ALL=(root) NOPASSWD: /bin/systemctl status xray
 $ADMIN_USER ALL=(root) NOPASSWD: /bin/systemctl is-active xray
 $ADMIN_USER ALL=(root) NOPASSWD: /bin/systemctl restart xray-admin
 $ADMIN_USER ALL=(root) NOPASSWD: /bin/systemctl status xray-admin
+$ADMIN_USER ALL=(root) NOPASSWD: /bin/systemctl is-active xray-admin
 
-$ADMIN_USER ALL=(root) NOPASSWD: /usr/local/bin/xray api *
+# Только конкретные read-only api команды для метрик
+$ADMIN_USER ALL=(root) NOPASSWD: /usr/local/bin/xray api statsquery --server=127.0.0.1\:10085 -pattern user>>>
+$ADMIN_USER ALL=(root) NOPASSWD: /usr/local/bin/xray api stats --server=127.0.0.1\:10085 -reset=false
 
+# Health-чек скрипты (нужны для алиасов xstat/xwatch)
 $ADMIN_USER ALL=(root) NOPASSWD: /usr/local/sbin/xray-health.sh
 $ADMIN_USER ALL=(root) NOPASSWD: /usr/local/sbin/xray-metrics.sh
 EOF
@@ -111,7 +118,7 @@ log_ok "sudoers для $ADMIN_USER настроен"
 sudoers_panel="/etc/sudoers.d/$PANEL_USER-xray"
 cat > "$sudoers_panel" <<EOF
 # Разрешения для админ-панели на управление xray
-
+# Только конкретные команды без glob-аргументов.
 $PANEL_USER ALL=(root) NOPASSWD: /bin/systemctl restart xray
 $PANEL_USER ALL=(root) NOPASSWD: /bin/systemctl reload xray
 $PANEL_USER ALL=(root) NOPASSWD: /bin/systemctl start xray
@@ -120,11 +127,18 @@ $PANEL_USER ALL=(root) NOPASSWD: /bin/systemctl is-active xray
 $PANEL_USER ALL=(root) NOPASSWD: /bin/systemctl status xray
 $PANEL_USER ALL=(root) NOPASSWD: /bin/systemctl enable xray
 $PANEL_USER ALL=(root) NOPASSWD: /bin/systemctl disable xray
+
+# Валидация конфига (фиксированный набор аргументов)
 $PANEL_USER ALL=(root) NOPASSWD: /usr/local/bin/xray -test -confdir /usr/local/etc/xray/conf.d
+
+# Генерация ключей — только без аргументов, иначе xray принимает file/pipe и
+# можно протащить произвольные данные.
 $PANEL_USER ALL=(root) NOPASSWD: /usr/local/bin/xray x25519
-$PANEL_USER ALL=(root) NOPASSWD: /usr/local/bin/xray x25519 *
 $PANEL_USER ALL=(root) NOPASSWD: /usr/local/bin/xray uuid
-$PANEL_USER ALL=(root) NOPASSWD: /usr/local/bin/xray api *
+
+# Read-only метрики
+$PANEL_USER ALL=(root) NOPASSWD: /usr/local/bin/xray api statsquery --server=127.0.0.1\:10085 -pattern user>>>
+$PANEL_USER ALL=(root) NOPASSWD: /usr/local/bin/xray api stats --server=127.0.0.1\:10085 -reset=false
 EOF
 
 chmod 440 "$sudoers_panel"

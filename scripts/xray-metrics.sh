@@ -48,36 +48,53 @@ else
     MEM_MB=0
 fi
 
-FD=$(ls /proc/$XRAY_PID/fd 2>/dev/null | wc -l)
-CPU=$(ps -o %cpu= -p $XRAY_PID 2>/dev/null | tr -d ' ')
+# ls на /proc/PID/fd может потребовать root, на 750-доступе сработает только владелец.
+FD=$(ls "/proc/$XRAY_PID/fd" 2>/dev/null | wc -l)
+CPU=$(ps -o %cpu= -p "$XRAY_PID" 2>/dev/null | tr -d ' ')
 CPU=${CPU:-0}
 
 # === TCP соединения (по состояниям) ===
-CONN_TOTAL=$(ss -tn state established 2>/dev/null | wc -l)
-CONN_SYN_RECV=$(ss -tn state syn-recv 2>/dev/null | wc -l)
-CONN_TIME_WAIT=$(ss -tn state time-wait 2>/dev/null | wc -l)
-CONN_CLOSE_WAIT=$(ss -tn state close-wait 2>/dev/null | wc -l)
-CONN_FIN_WAIT=$(ss -tn state fin-wait-1 2>/dev/null | wc -l)
-# -1 на header
-[[ $CONN_TOTAL -gt 0 ]] && CONN_TOTAL=$((CONN_TOTAL - 1))
-[[ $CONN_SYN_RECV -gt 0 ]] && CONN_SYN_RECV=$((CONN_SYN_RECV - 1))
-[[ $CONN_TIME_WAIT -gt 0 ]] && CONN_TIME_WAIT=$((CONN_TIME_WAIT - 1))
-[[ $CONN_CLOSE_WAIT -gt 0 ]] && CONN_CLOSE_WAIT=$((CONN_CLOSE_WAIT - 1))
-[[ $CONN_FIN_WAIT -gt 0 ]] && CONN_FIN_WAIT=$((CONN_FIN_WAIT - 1))
+# -H убирает заголовок, поэтому wc -l даёт чистый счётчик.
+CONN_TOTAL=$(ss -Htn state established 2>/dev/null | wc -l)
+CONN_SYN_RECV=$(ss -Htn state syn-recv 2>/dev/null | wc -l)
+CONN_TIME_WAIT=$(ss -Htn state time-wait 2>/dev/null | wc -l)
+CONN_CLOSE_WAIT=$(ss -Htn state close-wait 2>/dev/null | wc -l)
+CONN_FIN_WAIT=$(ss -Htn state fin-wait-1 2>/dev/null | wc -l)
 
 # === Load и CPU ===
 LOAD1=$(awk '{print $1}' /proc/loadavg)
-STEAL=$(top -bn1 | grep '%Cpu' | awk '{print $16}' | tr -d ',')
-STEAL=${STEAL:-0}
+
+# steal % через /proc/stat (две выборки с интервалом 1с — мгновенный показатель).
+# Выкинули top: позиция колонки "st" зависит от версии и локали.
+read -r _ user1 nice1 sys1 idle1 iowait1 irq1 softirq1 steal1 _ < /proc/stat
+sleep 1
+read -r _ user2 nice2 sys2 idle2 iowait2 irq2 softirq2 steal2 _ < /proc/stat
+total_delta=$(( (user2+nice2+sys2+idle2+iowait2+irq2+softirq2+steal2) -
+                (user1+nice1+sys1+idle1+iowait1+irq1+softirq1+steal1) ))
+steal_delta=$(( steal2 - steal1 ))
+if (( total_delta > 0 )); then
+    STEAL=$(awk -v s="$steal_delta" -v t="$total_delta" 'BEGIN{printf "%.1f", (s/t)*100}')
+else
+    STEAL=0
+fi
 
 # === Трафик по юзерам (cumulative с момента старта xray) ===
-STATS_RAW=$(xray api statsquery --server=127.0.0.1:10085 -pattern "user>>>" 2>/dev/null || echo "{}")
+# xray api statsquery возвращает JSON — парсим через jq, не grep+awk.
+STATS_RAW=$(xray api statsquery --server=127.0.0.1:10085 -pattern "user>>>" 2>/dev/null || echo '{}')
 
-# Суммарный uplink/downlink
-UPLINK_TOTAL_B=$(echo "$STATS_RAW" | grep -A1 "uplink" | grep "value" | awk '{print $2}' | tr -d ',' | awk '{sum+=$1} END {print sum+0}')
-DOWNLINK_TOTAL_B=$(echo "$STATS_RAW" | grep -A1 "downlink" | grep "value" | awk '{print $2}' | tr -d ',' | awk '{sum+=$1} END {print sum+0}')
-UPLINK_MB=$(( UPLINK_TOTAL_B / 1048576 ))
-DOWNLINK_MB=$(( DOWNLINK_TOTAL_B / 1048576 ))
+if command -v jq >/dev/null 2>&1; then
+    UPLINK_TOTAL_B=$(jq -r '
+        [.stat[]? | select((.name // "") | test("uplink$")) | (.value // "0" | tonumber)] | add // 0
+    ' <<<"$STATS_RAW" 2>/dev/null || echo 0)
+    DOWNLINK_TOTAL_B=$(jq -r '
+        [.stat[]? | select((.name // "") | test("downlink$")) | (.value // "0" | tonumber)] | add // 0
+    ' <<<"$STATS_RAW" 2>/dev/null || echo 0)
+else
+    UPLINK_TOTAL_B=0
+    DOWNLINK_TOTAL_B=0
+fi
+UPLINK_MB=$(( ${UPLINK_TOTAL_B%.*} / 1048576 ))
+DOWNLINK_MB=$(( ${DOWNLINK_TOTAL_B%.*} / 1048576 ))
 
 # === Пишем метрику ===
 echo "$TS|fd=$FD|mem_mb=$MEM_MB|cpu=$CPU|conn_est=$CONN_TOTAL|syn_recv=$CONN_SYN_RECV|time_wait=$CONN_TIME_WAIT|close_wait=$CONN_CLOSE_WAIT|fin_wait=$CONN_FIN_WAIT|load=$LOAD1|steal=$STEAL|up_mb=$UPLINK_MB|down_mb=$DOWNLINK_MB" >> "$METRICS_LOG"
