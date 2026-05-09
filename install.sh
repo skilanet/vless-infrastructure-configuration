@@ -1,22 +1,23 @@
 #!/usr/bin/env bash
 #
-# install.sh — bootstrap для vless-infrastructure-configuration
+# install.sh — bootstrap для xray-vpn-stack
 #
 # Использование:
-#   curl -fsSL https://raw.githubusercontent.com/USER/REPO/main/install.sh -o install.sh
-#   sudo bash install.sh
+#   sudo bash install.sh [команда] [опции]
 #
-# Или одной командой через bash <(...) для интерактива:
-#   sudo bash <(curl -fsSL https://raw.githubusercontent.com/USER/REPO/main/install.sh)
-#
-# Скрипт клонирует репозиторий в /opt/vless-infrastructure-configuration и запускает основной
-# инсталлер. Делается так, чтобы избежать сложностей с pipe и stdin.
+# Команды:
+#   (без аргументов)        — установить, продолжая с последнего checkpoint'а
+#   --reset                 — сбросить все checkpoint'ы и начать заново
+#   --rerun MODULE          — пересобрать конкретный модуль (например --rerun 14-xray-install)
+#   --status                — показать статус выполненных модулей
+#   --update                — git pull в /opt/xray-vpn-stack
+#   --help                  — эта справка
 
 set -euo pipefail
 
-REPO_URL="${XRAY_VPN_REPO:-https://github.com/skilanet/vless-infrastructure-configuration.git}"
+REPO_URL="${XRAY_VPN_REPO:-https://github.com/skilanet/xray-vpn-stack.git}"
 REPO_BRANCH="${XRAY_VPN_BRANCH:-main}"
-INSTALL_DIR="/opt/vless-infrastructure-configuration"
+INSTALL_DIR="/opt/xray-vpn-stack"
 
 # === Цвета ===
 if [[ -t 1 ]]; then
@@ -30,13 +31,38 @@ log() { echo "${BLUE}[bootstrap]${RESET} $*"; }
 err() { echo "${RED}[bootstrap]${RESET} $*" >&2; }
 ok()  { echo "${GREEN}[bootstrap]${RESET} $*"; }
 
+show_help() {
+    sed -n '3,15p' "$0" | sed 's/^# \?//'
+}
+
+# === Парсинг команд ===
+COMMAND="${1:-install}"
+case "$COMMAND" in
+    --help|-h|help)
+        show_help
+        exit 0
+        ;;
+    --status|status)
+        ;;
+    --reset|reset|--rerun|rerun|--update|update|install|"")
+        ;;
+    *)
+        err "неизвестная команда: $COMMAND"
+        echo ""
+        show_help
+        exit 1
+        ;;
+esac
+
 # === Проверки ===
 if [[ $EUID -ne 0 ]]; then
     err "запусти через sudo: sudo bash $0"
     exit 1
 fi
 
-if [[ ! -t 0 ]]; then
+# Команды которым не нужен интерактив
+NON_INTERACTIVE_COMMANDS="--status status --update update --help help --reset reset"
+if [[ ! -t 0 ]] && [[ ! " $NON_INTERACTIVE_COMMANDS " =~ " $COMMAND " ]]; then
     err "stdin не подключен к терминалу — установка интерактивная"
     err "запусти так:  sudo bash <(curl -fsSL <URL>)"
     err "  или сначала скачай: curl -fsSL <URL> -o install.sh && sudo bash install.sh"
@@ -52,10 +78,15 @@ fi
 
 # === Клонируем / обновляем репо ===
 if [[ -d "$INSTALL_DIR/.git" ]]; then
-    log "репо уже клонирован в $INSTALL_DIR, обновляю..."
-    cd "$INSTALL_DIR"
-    git fetch origin "$REPO_BRANCH"
-    git reset --hard "origin/$REPO_BRANCH"
+    if [[ "$COMMAND" == "--update" || "$COMMAND" == "update" ]]; then
+        log "обновляю репо..."
+        cd "$INSTALL_DIR"
+        git fetch origin "$REPO_BRANCH"
+        git reset --hard "origin/$REPO_BRANCH"
+        ok "репо обновлён"
+        # после --update — выходим, юзер сам решит когда запускать установку
+        exit 0
+    fi
 elif [[ -d "$INSTALL_DIR" ]]; then
     err "$INSTALL_DIR существует, но это не git-репо"
     err "удали его или перенеси: mv $INSTALL_DIR ${INSTALL_DIR}.bak"
@@ -65,13 +96,11 @@ else
     git clone --depth 1 --branch "$REPO_BRANCH" "$REPO_URL" "$INSTALL_DIR"
 fi
 
-# === Делаем все скрипты исполняемыми ===
+# === Делаем скрипты исполняемыми ===
 chmod +x "$INSTALL_DIR/install-real.sh"
 find "$INSTALL_DIR/lib" -name "*.sh" -exec chmod +x {} \;
 find "$INSTALL_DIR/scripts" -name "*.sh" -exec chmod +x {} \;
-
-ok "репо готов в $INSTALL_DIR"
-echo ""
+find "$INSTALL_DIR/scripts" -name "*.py" -exec chmod +x {} \;
 
 # === Запускаем основной инсталлер ===
 exec "$INSTALL_DIR/install-real.sh" "$@"
