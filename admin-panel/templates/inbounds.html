@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}Inbounds — xray-admin{% endblock %}
+
+{% block content %}
+<header class="page-header">
+    <h1>Inbounds</h1>
+    <a href="{{ url_for('inbounds_new') }}" class="btn-primary">+ New inbound</a>
+</header>
+
+{% if inbounds %}
+<table class="data-table">
+    <thead>
+        <tr>
+            <th>Tag</th>
+            <th>Port</th>
+            <th>Proto</th>
+            <th>Transport</th>
+            <th>SNI</th>
+            <th>Clients</th>
+            <th>File</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for ib in inbounds %}
+        {% set ss = ib.streamSettings | default({}) %}
+        {% set rs = ss.realitySettings | default({}) %}
+        {% set xh = ss.xhttpSettings | default({}) %}
+        {% set settings = ib.settings | default({}) %}
+        {% set clients = settings.clients | default([]) %}
+        {% set sn = rs.serverNames | default([]) %}
+        <tr>
+            <td><code>{{ ib.tag }}</code></td>
+            <td>{{ ib.port }}</td>
+            <td>{{ ib.protocol }}</td>
+            <td>
+                {{ ss.network | default('—') }}
+                {% if xh.mode %}<span class="badge">{{ xh.mode }}</span>{% endif %}
+            </td>
+            <td>{{ sn[0] if sn else '—' }}</td>
+            <td>{{ clients | length }}</td>
+            <td><small>{{ ib._file }}</small></td>
+            <td>
+                {% if ib.protocol == 'vless' %}
+                    <a href="{{ url_for('inbounds_edit', tag=ib.tag) }}" class="btn-small">Edit</a>
+                    <form method="POST" action="{{ url_for('inbounds_delete', tag=ib.tag) }}"
+                          class="inline-form"
+                          onsubmit="return confirm('Удалить inbound «{{ ib.tag }}»?');">
+                        <button type="submit" class="btn-small btn-danger">Delete</button>
+                    </form>
+                {% else %}
+                    <small class="muted">service</small>
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<div class="empty-state">
+    <p>Пока нет ни одного inbound'а.</p>
+    <a href="{{ url_for('inbounds_new') }}" class="btn-primary">+ Создать первый</a>
+</div>
+{% endif %}
+{% endblock %}

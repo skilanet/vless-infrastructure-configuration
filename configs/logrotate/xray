@@ -1,0 +1,12 @@
+/var/log/xray/*.log {
+    daily
+    rotate 7
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 640 ${XRAY_USER} ${XRAY_USER}
+    postrotate
+        systemctl reload xray > /dev/null 2>&1 || true
+    endscript
+}

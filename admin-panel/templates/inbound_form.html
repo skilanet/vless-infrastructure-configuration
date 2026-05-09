@@ -1,0 +1,152 @@
+{% extends "base.html" %}
+{% block title %}{% if mode == 'edit' %}Edit{% else %}New{% endif %} inbound — xray-admin{% endblock %}
+
+{% block content %}
+<h1>
+    {% if mode == 'edit' %}Edit inbound «{{ inbound.tag }}»{% else %}Создать VLESS-инбаунд{% endif %}
+</h1>
+
+<form method="POST" class="form-stack" id="inbound-form">
+    {% if mode == 'create' %}
+    <label>
+        Tag <span class="required">*</span>
+        <input type="text" name="tag" required pattern="[a-z0-9][a-z0-9\-]*" maxlength="30"
+               placeholder="vless-main">
+        <small>уникальное имя (латиница, цифры, дефис; не меняется после создания)</small>
+    </label>
+    {% else %}
+    <label>
+        Tag
+        <input type="text" value="{{ inbound.tag }}" readonly disabled>
+        <small>tag нельзя поменять после создания</small>
+    </label>
+    {% endif %}
+
+    <label>
+        Port <span class="required">*</span>
+        <input type="number" name="port" required min="1" max="65535" id="port-input"
+               value="{{ inbound.port if inbound else 443 }}">
+        <small id="port-hint">от 1 до 65535, не должен быть занят другим inbound'ом</small>
+    </label>
+
+    <label>
+        Transport <span class="required">*</span>
+        <select name="transport" id="transport-select" required>
+            <option value="xhttp" {% if inbound and inbound.transport == 'xhttp' %}selected{% endif %}>
+                XHTTP (HTTP/2-based, маскируется под HTTPS)
+            </option>
+            <option value="tcp" {% if inbound and inbound.transport == 'tcp' %}selected{% endif %}>
+                TCP + Vision (XTLS, максимальная скорость)
+            </option>
+        </select>
+    </label>
+
+    <label id="xhttp-mode-block">
+        XHTTP mode
+        <select name="xhttp_mode">
+            {% for m in xhttp_modes %}
+            <option value="{{ m }}" {% if inbound and inbound.xhttp_mode == m %}selected{% endif %}>
+                {{ m }}{% if m == 'stream-one' %} (быстрее, рекомендуется){% endif %}{% if m == 'packet-up' %} (стелс, максимум обфускации){% endif %}
+            </option>
+            {% endfor %}
+        </select>
+    </label>
+
+    <label>
+        Reality SNI <span class="required">*</span>
+        <select name="sni_preset" id="sni-preset">
+            {% for s in sni_options %}
+            <option value="{{ s }}" {% if inbound and inbound.sni == s %}selected{% endif %}>{{ s }}</option>
+            {% endfor %}
+            <option value="__custom__" {% if inbound and inbound.sni and inbound.sni not in sni_options %}selected{% endif %}>
+                ввести свой...
+            </option>
+        </select>
+        <input type="text" name="sni" id="sni-custom" required
+               value="{{ inbound.sni if inbound else 'yahoo.com' }}"
+               placeholder="example.com"
+               pattern="[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)+">
+        <small>домен под который маскируемся (валидный TLS 1.3 сайт)</small>
+    </label>
+
+    <label>
+        Reality dest (опционально)
+        <input type="text" name="dest"
+               value="{{ inbound.dest if inbound else '' }}"
+               placeholder="оставь пустым — резолвим SNI автоматически">
+        <small>обычно IP:443 куда проксируем не-VLESS трафик. Пусто = автоматически</small>
+    </label>
+
+    <div class="form-actions">
+        <button type="submit" class="btn-primary">
+            {% if mode == 'edit' %}Сохранить{% else %}Создать{% endif %}
+        </button>
+        <a href="{{ url_for('inbounds_list') }}" class="btn-cancel">Отмена</a>
+    </div>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+    var transportSelect = document.getElementById('transport-select');
+    var xhttpModeBlock = document.getElementById('xhttp-mode-block');
+    var sniPreset = document.getElementById('sni-preset');
+    var sniCustom = document.getElementById('sni-custom');
+    var portInput = document.getElementById('port-input');
+    var portHint = document.getElementById('port-hint');
+    var excludeTag = {{ ('"' + inbound.tag + '"') | safe if (mode == 'edit' and inbound) else 'null' }};
+
+    function updateXhttpVisibility() {
+        xhttpModeBlock.style.display = transportSelect.value === 'xhttp' ? '' : 'none';
+    }
+    transportSelect.addEventListener('change', updateXhttpVisibility);
+    updateXhttpVisibility();
+
+    function syncSniFromPreset() {
+        if (sniPreset.value === '__custom__') {
+            sniCustom.removeAttribute('readonly');
+            sniCustom.focus();
+        } else {
+            sniCustom.value = sniPreset.value;
+            sniCustom.setAttribute('readonly', 'readonly');
+        }
+    }
+    sniPreset.addEventListener('change', syncSniFromPreset);
+
+    // На старте: если значение SNI не из списка пресетов — переключить на custom
+    var presetValues = Array.from(sniPreset.options).map(function(o){ return o.value; });
+    if (sniCustom.value && presetValues.indexOf(sniCustom.value) === -1) {
+        sniPreset.value = '__custom__';
+    }
+    if (sniPreset.value !== '__custom__') {
+        sniCustom.setAttribute('readonly', 'readonly');
+    }
+
+    // Live-валидация порта
+    var portTimeout;
+    portInput.addEventListener('input', function() {
+        clearTimeout(portTimeout);
+        var port = portInput.value;
+        portTimeout = setTimeout(function() {
+            if (!port || port < 1 || port > 65535) {
+                portHint.textContent = 'порт должен быть в диапазоне 1-65535';
+                portHint.className = 'error';
+                return;
+            }
+            var url = '/api/check-port?port=' + encodeURIComponent(port);
+            if (excludeTag) url += '&exclude_tag=' + encodeURIComponent(excludeTag);
+            fetch(url).then(function(r) { return r.json(); }).then(function(data) {
+                if (data.valid) {
+                    portHint.textContent = '✓ порт свободен';
+                    portHint.className = 'success';
+                } else {
+                    portHint.textContent = '✗ ' + data.error;
+                    portHint.className = 'error';
+                }
+            });
+        }, 400);
+    });
+})();
+</script>
+{% endblock %}

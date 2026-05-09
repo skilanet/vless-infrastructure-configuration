@@ -1,0 +1,25 @@
+# State и логи установки
+*.bak
+*.bak.*
+state.env
+xray-vpn-stack-state.env
+install.log
+*.log
+
+# Python кэш
+__pycache__/
+*.pyc
+*.pyo
+
+# Macos / IDE
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*~
+
+# Локальные секреты (если случайно создадутся)
+private-keys/
+*.private
+*.pem
+secrets.env

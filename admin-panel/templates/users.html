@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Users — xray-admin{% endblock %}
+
+{% block content %}
+<header class="page-header">
+    <h1>Users</h1>
+    <a href="{{ url_for('users_new') }}" class="btn-primary">+ New user</a>
+</header>
+
+{% if users %}
+<table class="data-table">
+    <thead>
+        <tr>
+            <th>Email</th>
+            <th>UUID</th>
+            <th>Inbounds</th>
+            <th>Up</th>
+            <th>Down</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for u in users %}
+        <tr>
+            <td><strong>{{ u.email }}</strong></td>
+            <td><code class="uuid">{{ u.id[:8] }}…{{ u.id[-4:] }}</code></td>
+            <td>
+                {% for ib in u.inbounds %}
+                    <span class="badge">{{ ib }}</span>
+                {% endfor %}
+            </td>
+            <td>{{ '%.1f' | format(u.uplink / 1048576) }} MB</td>
+            <td>{{ '%.1f' | format(u.downlink / 1048576) }} MB</td>
+            <td>
+                <a href="{{ url_for('users_edit', uid=u.id) }}" class="btn-small">Edit</a>
+                <form method="POST" action="{{ url_for('users_delete', uid=u.id) }}"
+                      class="inline-form"
+                      onsubmit="return confirm('Удалить юзера «{{ u.email }}»?');">
+                    <button type="submit" class="btn-small btn-danger">Delete</button>
+                </form>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<div class="empty-state">
+    <p>Юзеров пока нет.</p>
+    <a href="{{ url_for('users_new') }}" class="btn-primary">+ Создать первого</a>
+</div>
+{% endif %}
+{% endblock %}

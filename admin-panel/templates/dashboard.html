@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — xray-admin{% endblock %}
+
+{% block content %}
+<h1>Dashboard</h1>
+
+<section class="status-cards">
+    <div class="status-card {% if xray_active %}status-ok{% else %}status-warn{% endif %}">
+        <div class="status-label">xray status</div>
+        <div class="status-value">
+            {% if xray_active %}● running{% else %}● stopped{% endif %}
+        </div>
+    </div>
+
+    <div class="status-card">
+        <div class="status-label">configs</div>
+        <div class="status-value">{{ config_count }} files</div>
+    </div>
+
+    <div class="status-card">
+        <div class="status-label">inbounds</div>
+        <div class="status-value">{{ inbounds|length }}</div>
+    </div>
+
+    <div class="status-card">
+        <div class="status-label">users</div>
+        <div class="status-value">{{ users|length }}</div>
+    </div>
+</section>
+
+<section class="actions-row">
+    {% if xray_active %}
+        <form method="POST" action="{{ url_for('system_restart') }}" class="inline-form">
+            <button type="submit">Restart xray</button>
+        </form>
+        <form method="POST" action="{{ url_for('system_stop') }}" class="inline-form">
+            <button type="submit" class="btn-danger">Stop xray</button>
+        </form>
+    {% else %}
+        <form method="POST" action="{{ url_for('system_start') }}" class="inline-form">
+            <button type="submit" class="btn-success">Start xray</button>
+        </form>
+    {% endif %}
+</section>
+
+{% if not inbounds %}
+<section class="welcome">
+    <h2>Сервер только что установлен</h2>
+    <p>Создай свой первый VLESS-инбаунд:</p>
+    <a href="{{ url_for('inbounds_new') }}" class="btn-primary">+ Создать первый inbound</a>
+</section>
+{% else %}
+<section>
+    <h2>Inbounds (краткий список)</h2>
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Tag</th>
+                <th>Port</th>
+                <th>Protocol</th>
+                <th>Transport</th>
+                <th>Clients</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for ib in inbounds %}
+            {% set ss = ib.streamSettings | default({}) %}
+            {% set settings = ib.settings | default({}) %}
+            <tr>
+                <td><code>{{ ib.tag }}</code></td>
+                <td>{{ ib.port }}</td>
+                <td>{{ ib.protocol }}</td>
+                <td>{{ ss.network | default('—') }}</td>
+                <td>{{ (settings.clients | default([])) | length }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+{% endif %}
+{% endblock %}
