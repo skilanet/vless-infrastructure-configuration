@@ -39,7 +39,7 @@ banner() {
 
   ┌──────────────────────────────────────────────────────┐
   │                                                      │
-  │            xray-vpn-stack installer                  │
+  │            vless-infrastructure-configuration installer                  │
   │                                                      │
   │   VLESS + Reality + XHTTP + TCP/Vision               │
   │   monitoring · subscriptions · hardening             │

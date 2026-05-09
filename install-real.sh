@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 #
-# install-real.sh — основной инсталлер xray-vpn-stack
+# install-real.sh — основной инсталлер vless-infrastructure-configuration
 #
-# Запускается из /opt/xray-vpn-stack после клонирования через install.sh.
+# Запускается из /opt/vless-infrastructure-configuration после клонирования через install.sh.
 # Все модули в lib/ выполняются по порядку.
 
 set -euo pipefail
@@ -13,7 +13,7 @@ SCRIPTS_DIR="$SCRIPT_DIR/scripts"
 CONFIGS_DIR="$SCRIPT_DIR/configs"
 
 # Файл со state — переменные окружения накапливаются между модулями
-STATE_FILE="/tmp/xray-vpn-stack-state.env"
+STATE_FILE="/tmp/vless-infrastructure-configuration-state.env"
 
 # Если есть прерванная установка — спросим
 if [[ -f "$STATE_FILE" ]] && [[ -z "${RESUME:-}" ]]; then
@@ -33,7 +33,7 @@ source "$LIB_DIR/common.sh"
 export SCRIPT_DIR LIB_DIR SCRIPTS_DIR CONFIGS_DIR STATE_FILE
 
 # Лог установки
-LOG_FILE="/var/log/xray-vpn-stack-install.log"
+LOG_FILE="/var/log/vless-infrastructure-configuration-install.log"
 mkdir -p "$(dirname "$LOG_FILE")"
 
 # Запись всего вывода в лог + терминал

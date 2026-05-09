@@ -14,8 +14,8 @@ backup_file /etc/ssh/sshd_config
 mkdir -p /etc/ssh/sshd_config.d
 
 # Наш drop-in
-cat > /etc/ssh/sshd_config.d/99-xray-vpn-stack.conf <<EOF
-# Настройки от xray-vpn-stack installer
+cat > /etc/ssh/sshd_config.d/99-vless-infrastructure-configuration.conf <<EOF
+# Настройки от vless-infrastructure-configuration installer
 # Изменения:
 # - порт сменён на $SSH_PORT (если CHANGE_SSH_PORT=true)
 # - root login отключён
@@ -51,7 +51,7 @@ sed -i.bak \
 if ! sshd -t 2>/dev/null; then
     log_error "sshd конфиг невалиден после изменений"
     log_error "восстанавливаю из бэкапа"
-    rm -f /etc/ssh/sshd_config.d/99-xray-vpn-stack.conf
+    rm -f /etc/ssh/sshd_config.d/99-vless-infrastructure-configuration.conf
     cp /etc/ssh/sshd_config.bak.* /etc/ssh/sshd_config 2>/dev/null || true
     exit 1
 fi

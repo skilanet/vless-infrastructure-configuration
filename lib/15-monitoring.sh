@@ -68,7 +68,7 @@ log_info "добавляю алиасы для $ADMIN_USER..."
 
 bashrc="/home/$ADMIN_USER/.bashrc"
 aliases_block="
-# === xray-vpn-stack aliases ===
+# === vless-infrastructure-configuration aliases ===
 alias xstat='sudo /usr/local/sbin/xray-health.sh'
 alias xwatch='watch -c -n 5 sudo /usr/local/sbin/xray-health.sh'
 alias xlogs='sudo tail -f /var/log/xray/access.log'
@@ -76,7 +76,7 @@ alias xerr='sudo tail -f /var/log/xray/error.log'
 alias xmetrics='sudo tail -f /var/log/xray-monitor/metrics.log'
 "
 
-if [[ -f "$bashrc" ]] && ! grep -q "xray-vpn-stack aliases" "$bashrc"; then
+if [[ -f "$bashrc" ]] && ! grep -q "vless-infrastructure-configuration aliases" "$bashrc"; then
     echo "$aliases_block" >> "$bashrc"
     chown "$ADMIN_USER:$ADMIN_USER" "$bashrc"
     log_ok "алиасы добавлены"

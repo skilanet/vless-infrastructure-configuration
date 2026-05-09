@@ -2,7 +2,7 @@
 *.bak
 *.bak.*
 state.env
-xray-vpn-stack-state.env
+vless-infrastructure-configuration-state.env
 install.log
 *.log
 

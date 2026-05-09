@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# install.sh — bootstrap для xray-vpn-stack
+# install.sh — bootstrap для vless-infrastructure-configuration
 #
 # Использование:
 #   curl -fsSL https://raw.githubusercontent.com/USER/REPO/main/install.sh -o install.sh
@@ -9,14 +9,14 @@
 # Или одной командой через bash <(...) для интерактива:
 #   sudo bash <(curl -fsSL https://raw.githubusercontent.com/USER/REPO/main/install.sh)
 #
-# Скрипт клонирует репозиторий в /opt/xray-vpn-stack и запускает основной
+# Скрипт клонирует репозиторий в /opt/vless-infrastructure-configuration и запускает основной
 # инсталлер. Делается так, чтобы избежать сложностей с pipe и stdin.
 
 set -euo pipefail
 
-REPO_URL="${XRAY_VPN_REPO:-https://github.com/skilanet/xray-vpn-stack.git}"
+REPO_URL="${XRAY_VPN_REPO:-https://github.com/skilanet/vless-infrastructure-configuration.git}"
 REPO_BRANCH="${XRAY_VPN_BRANCH:-main}"
-INSTALL_DIR="/opt/xray-vpn-stack"
+INSTALL_DIR="/opt/vless-infrastructure-configuration"
 
 # === Цвета ===
 if [[ -t 1 ]]; then

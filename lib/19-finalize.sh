@@ -51,9 +51,9 @@ fi
 log_ok "финализация завершена"
 
 # === Сохраняем итоговый отчёт ===
-report_file="/root/xray-vpn-stack-installed.txt"
+report_file="/root/vless-infrastructure-configuration-installed.txt"
 {
-    echo "xray-vpn-stack установка завершена $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+    echo "vless-infrastructure-configuration установка завершена $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
     echo ""
     echo "=== Системные параметры ==="
     echo "Админ user:        $ADMIN_USER"
@@ -69,8 +69,8 @@ report_file="/root/xray-vpn-stack-installed.txt"
     echo "3. Залогинься как $PANEL_LOGIN"
     echo "4. Создай первый VLESS-инбаунд через UI"
     echo ""
-    echo "Все скрипты установки: /opt/xray-vpn-stack/"
-    echo "Лог установки:         /var/log/xray-vpn-stack-install.log"
+    echo "Все скрипты установки: /opt/vless-infrastructure-configuration/"
+    echo "Лог установки:         /var/log/vless-infrastructure-configuration-install.log"
     echo ""
 } > "$report_file"
 

@@ -1,4 +1,4 @@
-# xray-vpn-stack
+# vless-infrastructure-configuration
 
 Идемпотентный установщик для xray-сервера с веб-админкой.
 
@@ -28,7 +28,7 @@
 
 ```bash
 # Скачать установщик
-curl -fsSL https://raw.githubusercontent.com/skilanet/xray-vpn-stack/main/install.sh -o /tmp/install.sh
+curl -fsSL https://raw.githubusercontent.com/skilanet/vless-infrastructure-configuration/main/install.sh -o /tmp/install.sh
 
 # Запустить (интерактивно)
 sudo bash /tmp/install.sh
@@ -37,7 +37,7 @@ sudo bash /tmp/install.sh
 Или одной командой:
 
 ```bash
-sudo bash <(curl -fsSL https://raw.githubusercontent.com/skilanet/xray-vpn-stack/main/install.sh)
+sudo bash <(curl -fsSL https://raw.githubusercontent.com/skilanet/vless-infrastructure-configuration/main/install.sh)
 ```
 
 Установщик спросит:
@@ -82,7 +82,7 @@ http://<server-ip>:8088
 ## Структура проекта
 
 ```
-xray-vpn-stack/
+vless-infrastructure-configuration/
 ├── install.sh                 # bootstrap entry point
 ├── install-real.sh            # основной оркестратор
 ├── README.md
