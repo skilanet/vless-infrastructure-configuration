@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Settings — xray-admin{% endblock %}
+
+{% block content %}
+<header class="page-header">
+    <h1>Settings</h1>
+</header>
+
+<section class="settings-block">
+    <h2>Базовая инфраструктура</h2>
+    <p class="muted">
+        4 служебных файла в <code>{{ '/usr/local/etc/xray/conf.d/' }}</code>:
+        log, api, metrics, stats, policy, DoH-DNS, рутинг с блокировкой
+        RU/BY и рекламы, freedom/blackhole outbounds, локальные api/metrics
+        инбаунды на 127.0.0.1. Без них панель не видит трафик юзеров,
+        блокировки не работают, DNS идёт через системный.
+    </p>
+
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Файл</th>
+                <th>Статус</th>
+                <th>Размер</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for f in files %}
+            <tr>
+                <td><code>{{ f.name }}</code></td>
+                <td>
+                    {% if f.exists %}
+                        <span class="badge badge-ok">существует</span>
+                    {% else %}
+                        <span class="badge badge-warn">отсутствует</span>
+                    {% endif %}
+                </td>
+                <td>{{ f.size }} B</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <form method="POST" action="{{ url_for('settings_bootstrap') }}"
+          onsubmit="return confirm('Создать недостающие служебные файлы и перезапустить xray?');"
+          style="margin-top: 1.5em;">
+        <label class="checkbox-row">
+            <input type="checkbox" name="overwrite" value="1">
+            Перезаписать существующие (force overwrite)
+        </label>
+        <button type="submit" class="btn-primary">Создать базовую инфраструктуру</button>
+    </form>
+
+    <p class="muted" style="margin-top: 1em;">
+        Порты служебных инбаундов фиксированы: api={{ api_port }}, metrics={{ metrics_port }},
+        socks={{ socks_port }} (все на 127.0.0.1). Если нужно поменять — правь JSON
+        напрямую через <code>sudoedit</code>.
+    </p>
+</section>
+{% endblock %}

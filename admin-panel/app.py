@@ -44,6 +44,17 @@ DEFAULT_SNI_OPTIONS = [
 TRANSPORT_CHOICES = ["xhttp", "tcp"]
 XHTTP_MODES = ["stream-one", "packet-up", "auto"]
 
+# Служебная инфраструктура (пишется одной кнопкой в /settings)
+BASE_INFRA_FILES = [
+    "00-base.json",
+    "01-routing.json",
+    "02-outbounds.json",
+    "10-service-inbounds.json",
+]
+DEFAULT_API_PORT = 10085
+DEFAULT_METRICS_PORT = 10086
+DEFAULT_SOCKS_PORT = 10808
+
 # ==== Загрузка конфига ====
 if not CONFIG_FILE.exists():
     raise RuntimeError(f"Файл конфига не найден: {CONFIG_FILE}")
@@ -405,6 +416,178 @@ def make_qr_svg(data: str) -> str:
     buf = io.BytesIO()
     img.save(buf)
     return buf.getvalue().decode()
+
+
+# ==== Base infrastructure templates ====
+# Шаблоны 4 служебных файлов: log/api/metrics/stats/policy/dns + routing +
+# outbounds + service-inbounds. Один в один соответствуют рабочему серверу.
+# При необходимости можно править прямо JSON-ом через `sudoedit`, но дефолты
+# подобраны так, чтобы панель видела статсы и применялись блокировки.
+
+def base_config_template() -> dict:
+    return {
+        "log": {
+            "loglevel": "info",
+            "access": "/var/log/xray/access.log",
+            "error": "/var/log/xray/error.log",
+        },
+        "api": {
+            "tag": "api",
+            "services": ["StatsService", "LoggerService", "HandlerService"],
+        },
+        "metrics": {"tag": "metrics"},
+        "stats": {},
+        "policy": {
+            "levels": {
+                "0": {
+                    "handshake": 4,
+                    "connIdle": 120,
+                    "uplinkOnly": 2,
+                    "downlinkOnly": 5,
+                    "statsUserUplink": True,
+                    "statsUserDownlink": True,
+                    "bufferSize": 512,
+                },
+            },
+            "system": {
+                "statsInboundUplink": True,
+                "statsInboundDownlink": True,
+                "statsOutboundUplink": True,
+                "statsOutboundDownlink": True,
+            },
+        },
+        "dns": {
+            "servers": [
+                {
+                    "address": "https+local://1.1.1.1/dns-query",
+                    "domains": ["geosite:geolocation-!cn"],
+                    "skipFallback": True,
+                },
+                {
+                    "address": "https+local://9.9.9.9/dns-query",
+                    "skipFallback": True,
+                },
+                "localhost",
+            ],
+            "queryStrategy": "UseIP",
+            "disableCache": False,
+            "disableFallback": False,
+            "tag": "dns_inbound",
+        },
+    }
+
+
+def routing_config_template() -> dict:
+    return {
+        "routing": {
+            "domainStrategy": "IPIfNonMatch",
+            "rules": [
+                {"type": "field", "inboundTag": ["api"], "outboundTag": "api"},
+                {"type": "field", "inboundTag": ["metrics"], "outboundTag": "metrics"},
+                {"type": "field", "inboundTag": ["dns_inbound"], "outboundTag": "direct"},
+                {"type": "field", "protocol": ["bittorrent"], "outboundTag": "block"},
+                {"type": "field", "domain": ["geosite:category-ads-all"], "outboundTag": "block"},
+                {"type": "field", "ip": ["geoip:private"], "outboundTag": "block"},
+                {"type": "field", "ip": ["geoip:ru", "geoip:by"], "outboundTag": "block"},
+                {
+                    "type": "field",
+                    "domain": [
+                        "geosite:category-gov-ru",
+                        "regexp:.*\\.(ru|рф|by|su)$",
+                        "domain:yandex.com",
+                        "domain:yandex.net",
+                        "domain:yandex.kz",
+                        "domain:2gis.com",
+                        "domain:vk.com",
+                        "domain:vk.me",
+                        "domain:vk.link",
+                        "domain:mail.ru",
+                        "domain:ozon.com",
+                        "domain:wildberries.com",
+                        "domain:avito.ma",
+                        "domain:sberbank.com",
+                        "domain:tinkoff.com",
+                        "domain:kinopoisk.org",
+                        "domain:kaspersky.com",
+                    ],
+                    "outboundTag": "block",
+                },
+                {"type": "field", "domain": ["geosite:private"], "outboundTag": "direct"},
+            ],
+        },
+    }
+
+
+def outbounds_config_template() -> dict:
+    return {
+        "outbounds": [
+            {
+                "protocol": "freedom",
+                "settings": {"domainStrategy": "UseIPv4"},
+                "tag": "direct",
+                "streamSettings": {
+                    "sockopt": {
+                        "tcpFastOpen": True,
+                        "tcpCongestion": "bbr",
+                        "tcpNoDelay": True,
+                        "tcpKeepAliveInterval": 30,
+                        "mark": 255,
+                    },
+                },
+            },
+            {
+                "protocol": "blackhole",
+                "settings": {"response": {"type": "http"}},
+                "tag": "block",
+            },
+            {"protocol": "freedom", "tag": "api"},
+            {"protocol": "freedom", "tag": "metrics"},
+        ],
+    }
+
+
+def service_inbounds_template(socks_port: int = DEFAULT_SOCKS_PORT,
+                              api_port: int = DEFAULT_API_PORT,
+                              metrics_port: int = DEFAULT_METRICS_PORT) -> dict:
+    return {
+        "inbounds": [
+            {
+                "tag": "socks-in",
+                "port": socks_port,
+                "listen": "127.0.0.1",
+                "protocol": "socks",
+                "settings": {"auth": "noauth"},
+            },
+            {
+                "listen": "127.0.0.1",
+                "port": api_port,
+                "protocol": "dokodemo-door",
+                "settings": {"address": "127.0.0.1"},
+                "tag": "api",
+            },
+            {
+                "listen": "127.0.0.1",
+                "port": metrics_port,
+                "protocol": "dokodemo-door",
+                "settings": {"address": "127.0.0.1"},
+                "tag": "metrics",
+            },
+        ],
+    }
+
+
+def base_infra_status() -> list[dict]:
+    """Статус каждого служебного файла: есть/нет + размер."""
+    out = []
+    for name in BASE_INFRA_FILES:
+        path = CONFIG_DIR / name
+        out.append({
+            "name": name,
+            "path": str(path),
+            "exists": path.exists(),
+            "size": path.stat().st_size if path.exists() else 0,
+        })
+    return out
 
 
 def collect_user_links(uid: str) -> list[dict]:
@@ -878,6 +1061,54 @@ def api_check_port():
         return jsonify({"valid": True, "port": port})
     except ValueError as e:
         return jsonify({"valid": False, "error": str(e)})
+
+
+# ===== Settings (служебная инфраструктура) =====
+
+@app.route("/settings")
+@login_required
+def settings():
+    return render_template("settings.html",
+                           files=base_infra_status(),
+                           xray_active=is_xray_active(),
+                           api_port=DEFAULT_API_PORT,
+                           metrics_port=DEFAULT_METRICS_PORT,
+                           socks_port=DEFAULT_SOCKS_PORT)
+
+
+@app.route("/settings/bootstrap", methods=["POST"])
+@login_required
+def settings_bootstrap():
+    overwrite = request.form.get("overwrite") == "1"
+
+    targets = {
+        "00-base.json": base_config_template(),
+        "01-routing.json": routing_config_template(),
+        "02-outbounds.json": outbounds_config_template(),
+        "10-service-inbounds.json": service_inbounds_template(),
+    }
+
+    written, skipped = [], []
+    for name, data in targets.items():
+        path = CONFIG_DIR / name
+        if path.exists() and not overwrite:
+            skipped.append(name)
+            continue
+        write_config_file(path, data)
+        written.append(name)
+
+    if written:
+        ok, msg = systemctl("restart")
+        if ok:
+            flash(f"созданы: {', '.join(written)}; xray перезапущен", "success")
+        else:
+            flash(f"созданы: {', '.join(written)}, но xray не стартует: {msg}", "error")
+    if skipped:
+        flash(f"пропущены (уже есть, overwrite не выбран): {', '.join(skipped)}", "info")
+    if not written and not skipped:
+        flash("ничего не записано", "info")
+
+    return redirect(url_for("settings"))
 
 
 # ===== System =====

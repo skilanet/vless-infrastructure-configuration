@@ -31,7 +31,11 @@ combination of:
 - `sudo -u <panel-user> …` to mutate panel-owned state
 - `sudo chown … && sudo chmod …` to repair ownership/perms
 - `rsync -a --delete <repo>/admin-panel/ /opt/xray-admin/` (excluding `venv/`)
-  when only Python/template/static files changed
+  when only Python/template/static files changed. **If `requirements.txt`
+  changed or `app.py` gained a new top-level `import`, also run
+  `sudo -u xray-admin /opt/xray-admin/venv/bin/pip install -r
+  /opt/xray-admin/requirements.txt` before restarting the unit** — otherwise
+  workers will crash on `ModuleNotFoundError`.
 - `git -C /opt/vless-infrastructure-configuration pull` if the user wants to
   refresh the repo on the server first, then targeted commands
 

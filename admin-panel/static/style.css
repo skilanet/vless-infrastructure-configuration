@@ -491,3 +491,32 @@ button:disabled, .btn-primary:disabled {
     .links-grid { grid-template-columns: 1fr; }
     .qr-wrapper { width: 100%; height: auto; aspect-ratio: 1; max-width: 280px; }
 }
+
+/* === Settings page === */
+.settings-block {
+    background: #fff;
+    padding: 2em;
+    border-radius: 12px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    margin-bottom: 2em;
+}
+.settings-block h2 {
+    margin: 0 0 0.5em 0;
+    font-size: 1.3em;
+}
+.badge-ok {
+    background: #d1f4dd;
+    color: #0a7f3f;
+}
+.badge-warn {
+    background: #fff1c2;
+    color: #8a5a00;
+}
+.checkbox-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5em;
+    margin-bottom: 1em;
+    cursor: pointer;
+    user-select: none;
+}
