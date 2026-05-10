@@ -20,6 +20,7 @@ declare -A SCRIPTS=(
     ["gen-vless-links.sh"]="755"
     ["update-subs.sh"]="755"
     ["analyze-metrics.py"]="755"
+    ["find-sni.sh"]="755"
 )
 
 for script in "${!SCRIPTS[@]}"; do

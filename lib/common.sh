@@ -228,8 +228,7 @@ EOF
 
 # Финальный отчёт после установки
 print_post_install_info() {
-    local server_ip
-    server_ip=$(curl -4 -s --max-time 5 https://api.ipify.org 2>/dev/null || echo "<your-server-ip>")
+    local server_ip="${SERVER_IP:-<your-server-ip>}"
 
     cat <<EOF
 

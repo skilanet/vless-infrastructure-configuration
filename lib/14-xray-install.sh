@@ -75,13 +75,29 @@ fi
 # === Создание директорий ===
 log_info "подготавливаю файловую структуру..."
 
-# conf.d/ — здесь админ-панель будет писать конфиги
+# conf.d/ — здесь админ-панель пишет конфиги, xray-демон их читает.
+# Раскладка прав:
+#   /usr/local/etc/xray            root:xray  750  ← traverse-only для группы xray
+#   /usr/local/etc/xray/conf.d     panel:xray 2750 ← panel пишет, SGID для group=xray
+#   /usr/local/etc/xray/backups    panel:xray 2750 ← там же бэкапы конфигов от панели
+#
+# SGID-бит (2750) важен: без него файлы которые создаёт panel-юзер получат
+# его primary group (xray-admin), и xray-демон (в группе xray) их не прочитает.
+# С SGID новые файлы наследуют группу директории — xray.
 mkdir -p /usr/local/etc/xray/conf.d
 mkdir -p /usr/local/etc/xray/backups
+
+# PANEL_USER может прийти из state.env — в этом модуле его не было раньше.
+PANEL_OWNER="${PANEL_USER:-root}"
+
 chown root:"$XRAY_USER" /usr/local/etc/xray
-chown root:"$XRAY_USER" /usr/local/etc/xray/conf.d
 chmod 750 /usr/local/etc/xray
-chmod 750 /usr/local/etc/xray/conf.d
+
+chown "$PANEL_OWNER:$XRAY_USER" /usr/local/etc/xray/conf.d
+chmod 2750 /usr/local/etc/xray/conf.d
+
+chown "$PANEL_OWNER:$XRAY_USER" /usr/local/etc/xray/backups
+chmod 2750 /usr/local/etc/xray/backups
 
 # Логи xray
 mkdir -p /var/log/xray

@@ -67,6 +67,23 @@ else
 fi
 save_state "SSH_PORT" "$SSH_PORT"
 
+# === Внешний IP сервера ===
+# Нужен для генерации vless:// ссылок в QR-кодах.
+# Автодетект через локальный `ip route get` — без обращения к внешним сервисам.
+# На VPS-ках за NAT (AWS, GCP) тут будет приватный IP — поправь руками если надо.
+echo ""
+log_info "Внешний IP сервера"
+DETECTED_IP=$(ip -4 route get 1.1.1.1 2>/dev/null \
+              | awk '{for(i=1;i<=NF;i++) if($i=="src") {print $(i+1); exit}}' \
+              || true)
+echo "Этот IP попадёт в vless://-ссылки и QR-коды клиентов."
+if [[ -n "$DETECTED_IP" ]]; then
+    echo "  ${GRAY}автодетект (ip route get): $DETECTED_IP${RESET}"
+    echo "  ${GRAY}если у тебя VPS за NAT (AWS/GCP) — впиши внешний IP вручную${RESET}"
+fi
+prompt_string "IP-адрес сервера" "$DETECTED_IP" SERVER_IP
+save_state "SERVER_IP" "$SERVER_IP"
+
 # === Админ-панель ===
 echo ""
 log_info "Админ-панель"

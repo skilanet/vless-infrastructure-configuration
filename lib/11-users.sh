@@ -71,9 +71,18 @@ else
 fi
 
 # Добавляем panel-юзера в группу xray (для доступа к conf.d/)
-if ! id -nG "$PANEL_USER" | grep -qw "$XRAY_USER"; then
+# Sanity-check: XRAY_USER должен быть непустым, иначе grep -qw "" даст
+# ложный positive (любой набор групп его "содержит") и usermod пропустится.
+if [[ -z "${XRAY_USER:-}" ]]; then
+    log_error "XRAY_USER пуст — state.env не загрузился, не могу настроить группы"
+    exit 1
+fi
+
+if ! id -nG "$PANEL_USER" | tr ' ' '\n' | grep -qx "$XRAY_USER"; then
     usermod -aG "$XRAY_USER" "$PANEL_USER"
     log_ok "$PANEL_USER добавлен в группу $XRAY_USER (для доступа к conf.d)"
+else
+    log_info "$PANEL_USER уже в группе $XRAY_USER"
 fi
 
 # === Sudoers для админа ===

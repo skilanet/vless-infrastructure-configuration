@@ -32,6 +32,7 @@
             <td>{{ '%.1f' | format(u.uplink / 1048576) }} MB</td>
             <td>{{ '%.1f' | format(u.downlink / 1048576) }} MB</td>
             <td>
+                <a href="{{ url_for('users_links', uid=u.id) }}" class="btn-small">QR / Links</a>
                 <a href="{{ url_for('users_edit', uid=u.id) }}" class="btn-small">Edit</a>
                 <form method="POST" action="{{ url_for('users_delete', uid=u.id) }}"
                       class="inline-form"

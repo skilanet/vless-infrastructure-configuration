@@ -104,6 +104,7 @@ PANEL_LOGIN="$PANEL_LOGIN" \
 PANEL_PASSWORD_HASH="$PASSWORD_HASH" \
 PANEL_SECRET_KEY="$SECRET_KEY" \
 PANEL_CONFIG_PATH="$PANEL_CONFIG" \
+PANEL_SERVER_IP="${SERVER_IP:-}" \
 "$PANEL_DIR/venv/bin/python3" - <<'PYEOF'
 import json, os
 cfg = {
@@ -113,6 +114,10 @@ cfg = {
     "admin_password_hash": os.environ["PANEL_PASSWORD_HASH"],
     "secret_key": os.environ["PANEL_SECRET_KEY"],
 }
+# server_ip опционален — если не задан, app.py упадёт на ipify-детект
+sip = os.environ.get("PANEL_SERVER_IP", "").strip()
+if sip:
+    cfg["server_ip"] = sip
 with open(os.environ["PANEL_CONFIG_PATH"], "w") as f:
     json.dump(cfg, f, indent=2)
 PYEOF
@@ -143,19 +148,33 @@ Wants=network.target
 Type=simple
 User=$PANEL_USER
 Group=$PANEL_USER
+# Явный supplementary — чтобы доступ к /usr/local/etc/xray (root:xray 750)
+# не зависел от того, успел ли NSS-кеш заметить usermod -aG.
+SupplementaryGroups=$XRAY_USER
 WorkingDirectory=$PANEL_DIR
 ExecStart=$PANEL_DIR/venv/bin/gunicorn \\
+    --chdir /tmp \\
+    --pythonpath $PANEL_DIR \\
     --bind $PANEL_BIND:$PANEL_PORT \\
     --workers 2 \\
     --threads 2 \\
     --access-logfile - \\
     --error-logfile - \\
+    --worker-tmp-dir /dev/shm \\
     app:app
 Restart=on-failure
 RestartSec=5s
 
-# Безопасность
-NoNewPrivileges=true
+# Безопасность.
+#
+# Внимание: панель ПОЛАГАЕТСЯ на sudo для управления xray и ufw, поэтому
+# здесь мы НЕ можем включать:
+#   - NoNewPrivileges=true       ломает sudo (no_new_privs)
+#   - CapabilityBoundingSet=     лишает root-после-sudo capabilities (ufw умрёт без CAP_NET_ADMIN)
+#   - AmbientCapabilities=       не нужно — каждый sudo'нутый процесс получает свои
+#   - RestrictSUIDSGID=true в комбинации с пустым bounding set
+# Остальные protect-* безопасны: они ограничивают саму панель, но не дочерние
+# процессы после sudo (sudo делает execve и подбирает дефолтные политики).
 PrivateTmp=true
 PrivateDevices=true
 ProtectSystem=strict
@@ -169,11 +188,9 @@ ProtectHostname=true
 LockPersonality=true
 RestrictNamespaces=true
 RestrictRealtime=true
-RestrictSUIDSGID=true
 SystemCallArchitectures=native
-RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
-CapabilityBoundingSet=
-AmbientCapabilities=
+# AF_NETLINK обязателен для ufw (netfilter общается через netlink-сокеты).
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
 
 # Лимиты
 MemoryMax=200M
