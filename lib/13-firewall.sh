@@ -32,6 +32,9 @@ remove_rules_with_comment() {
     done
 }
 remove_rules_with_comment "SSH \(rate-limited\)"
+# Legacy-комменты с прошлых версий скрипта / ручных добавлений — иначе при
+# смене SSH_PORT остаются висеть orphan-правила со старыми портами.
+remove_rules_with_comment "SSH custom port"
 remove_rules_with_comment "admin panel"
 
 # SSH с rate-limit (защита от перебора)

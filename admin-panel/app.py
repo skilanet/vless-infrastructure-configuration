@@ -94,6 +94,25 @@ def systemctl(action: str, service: str = "xray") -> tuple[bool, str]:
     return result.returncode == 0, (result.stdout + result.stderr).strip()
 
 
+def ufw_allow(port: int, comment: str) -> tuple[bool, str]:
+    """Открыть TCP-порт в UFW. Возвращает (ok, msg). Не молчит при ошибке —
+    раньше ошибки глотались через check=False, и инбаунды создавались с
+    закрытым портом."""
+    result = subprocess.run(
+        ["sudo", "/usr/sbin/ufw", "allow", f"{port}/tcp", "comment", comment],
+        capture_output=True, text=True, timeout=10,
+    )
+    return result.returncode == 0, (result.stdout + result.stderr).strip()
+
+
+def ufw_delete(port: int) -> tuple[bool, str]:
+    result = subprocess.run(
+        ["sudo", "/usr/sbin/ufw", "delete", "allow", f"{port}/tcp"],
+        capture_output=True, text=True, timeout=10,
+    )
+    return result.returncode == 0, (result.stdout + result.stderr).strip()
+
+
 def is_xray_active() -> bool:
     ok, _ = systemctl("is-active", "xray")
     return ok
@@ -695,12 +714,10 @@ def inbounds_new():
             file_path = CONFIG_DIR / filename
             write_config_file(file_path, {"inbounds": [inbound]})
 
-            # UFW
-            subprocess.run(
-                ["sudo", "/usr/sbin/ufw", "allow", f"{port}/tcp",
-                 "comment", f"vless-{tag}"],
-                check=False, timeout=10,
-            )
+            ufw_ok, ufw_msg = ufw_allow(port, f"vless-{tag}")
+            if not ufw_ok:
+                flash(f"⚠ ufw allow {port}/tcp не сработал — клиенты не подключатся "
+                      f"пока порт закрыт: {ufw_msg}", "error")
 
             ok, msg = systemctl("restart")
             if ok:
@@ -780,17 +797,13 @@ def inbounds_edit(tag: str):
             file_data["inbounds"][idx] = new_inbound
             write_config_file(file_path, file_data)
 
-            # UFW: если порт изменился — закрыть старый, открыть новый
+            # UFW: если порт изменился — закрыть старый, открыть новый.
+            # Ошибки больше не глотаем — иначе инбаунд получит закрытый порт.
             if new_port != old_port:
-                subprocess.run(
-                    ["sudo", "/usr/sbin/ufw", "delete", "allow", f"{old_port}/tcp"],
-                    check=False, timeout=10,
-                )
-                subprocess.run(
-                    ["sudo", "/usr/sbin/ufw", "allow", f"{new_port}/tcp",
-                     "comment", f"vless-{tag}"],
-                    check=False, timeout=10,
-                )
+                ufw_delete(old_port)
+                ufw_ok, ufw_msg = ufw_allow(new_port, f"vless-{tag}")
+                if not ufw_ok:
+                    flash(f"⚠ ufw allow {new_port}/tcp не сработал: {ufw_msg}", "error")
 
             ok, msg = systemctl("restart")
             if ok:
@@ -847,10 +860,7 @@ def inbounds_delete(tag: str):
         file_path.unlink()
 
     if port:
-        subprocess.run(
-            ["sudo", "/usr/sbin/ufw", "delete", "allow", f"{port}/tcp"],
-            check=False, timeout=10,
-        )
+        ufw_delete(port)
 
     systemctl("restart")
     flash(f"inbound «{tag}» удалён", "success")
