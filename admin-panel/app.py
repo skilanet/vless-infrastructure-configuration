@@ -986,8 +986,12 @@ def evaluate_alerts() -> dict:
                 pass
         filtered.append(a)
 
-    # Preserve first_seen from previous active
-    prev_by_id = {a["id"]: a for a in state.get("active", [])}
+    # Preserve first_seen from previous active (skip corrupt entries)
+    prev_by_id = {
+        a["id"]: a
+        for a in state.get("active", [])
+        if isinstance(a, dict) and a.get("id")
+    }
     for a in filtered:
         prev = prev_by_id.get(a["id"])
         if prev:
@@ -1183,10 +1187,21 @@ def inject_globals():
         "nav_users_count": users_count,
         "server_ip": get_server_ip(),
         "server_hostname": hostname,
+        "asset_version": _asset_version(),
         "fmt_bytes": fmt_bytes,
         "fmt_short_uuid": fmt_short_uuid,
         "fmt_humans_ago": fmt_humans_ago,
     }
+
+
+_ASSET_DIR = Path(__file__).parent / "static"
+
+def _asset_version() -> str:
+    """Использует mtime style.css как cache-buster — меняется только при деплое."""
+    try:
+        return str(int((_ASSET_DIR / "style.css").stat().st_mtime))
+    except OSError:
+        return "0"
 
 
 def fmt_bytes(n) -> str:
@@ -2193,7 +2208,8 @@ def api_routing_reorder():
 @login_required
 def alerts_view():
     state = evaluate_alerts()
-    active = [a for a in state.get("active", []) if isinstance(a, dict)]
+    active = [a for a in state.get("active", [])
+              if isinstance(a, dict) and a.get("id") and a.get("title")]
     history = [h for h in state.get("history", []) if isinstance(h, dict)]
     return render_template("alerts.html",
                            active=active,
