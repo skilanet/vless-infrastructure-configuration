@@ -171,8 +171,18 @@ def ufw_delete(port: int) -> tuple[bool, str]:
     return result.returncode == 0, (result.stdout + result.stderr).strip()
 
 
-def is_xray_active() -> bool:
+_XRAY_ACTIVE_CACHE: dict = {"value": False, "ts": 0.0}
+_XRAY_ACTIVE_TTL = 5.0
+
+
+def is_xray_active(force: bool = False) -> bool:
+    """Кэшируем 5с — за один HTTP-запрос проверяется минимум 3-4 раза."""
+    now = time.time()
+    if not force and (now - _XRAY_ACTIVE_CACHE["ts"]) < _XRAY_ACTIVE_TTL:
+        return _XRAY_ACTIVE_CACHE["value"]
     ok, _ = systemctl("is-active", "xray")
+    _XRAY_ACTIVE_CACHE["value"] = ok
+    _XRAY_ACTIVE_CACHE["ts"] = now
     return ok
 
 
@@ -289,8 +299,19 @@ def get_user_by_uuid(uid: str) -> dict | None:
 
 
 # ==== xray stats ====
+# Кэшируем счётчики xray — они и так монотонные (растут только), быстрая
+# свежесть нам не нужна. -reset обходит кэш через force=True.
+_USER_STATS_CACHE: dict = {"data": None, "ts": 0.0}
+_INBOUND_STATS_CACHE: dict = {"data": None, "ts": 0.0}
+_XRAY_STATS_TTL = 8.0
+
+
 def get_xray_stats(reset: bool = False) -> dict[str, dict]:
     """{email: {uplink, downlink}} или {} если xray не работает."""
+    now = time.time()
+    if not reset and _USER_STATS_CACHE["data"] is not None \
+            and (now - _USER_STATS_CACHE["ts"]) < _XRAY_STATS_TTL:
+        return _USER_STATS_CACHE["data"]
     if not is_xray_active():
         return {}
     try:
@@ -312,12 +333,18 @@ def get_xray_stats(reset: bool = False) -> dict[str, dict]:
                 except (TypeError, ValueError):
                     val = 0
                 result.setdefault(email, {})[direction] = val
+        _USER_STATS_CACHE["data"] = result
+        _USER_STATS_CACHE["ts"] = now
         return result
     except (RuntimeError, json.JSONDecodeError):
-        return {}
+        return _USER_STATS_CACHE["data"] or {}
 
 
 def get_inbound_stats() -> dict[str, dict]:
+    now = time.time()
+    if _INBOUND_STATS_CACHE["data"] is not None \
+            and (now - _INBOUND_STATS_CACHE["ts"]) < _XRAY_STATS_TTL:
+        return _INBOUND_STATS_CACHE["data"]
     if not is_xray_active():
         return {}
     try:
@@ -336,14 +363,46 @@ def get_inbound_stats() -> dict[str, dict]:
                 except (TypeError, ValueError):
                     val = 0
                 result.setdefault(tag, {})[direction] = val
+        _INBOUND_STATS_CACHE["data"] = result
+        _INBOUND_STATS_CACHE["ts"] = now
         return result
     except (RuntimeError, json.JSONDecodeError):
-        return {}
+        return _INBOUND_STATS_CACHE["data"] or {}
 
 
 # ==== System stats (psutil) ====
-def get_system_stats() -> dict:
-    """CPU/RAM/disk/network/uptime. Возвращает 0/dash значения если psutil нет."""
+# In-process cache. Per-worker — у gunicorn 2 worker-а каждый держит свой кэш,
+# значения слегка разъезжаются, но это для админ-панели приемлемо.
+_SYS_CACHE: dict = {"data": None, "ts": 0.0}
+_SYS_TTL = 10.0   # секунды
+_FD_CACHE: dict = {"value": 0, "ts": 0.0}
+_FD_TTL = 30.0    # FD count считается итерацией всех процессов — кэшируем дольше
+
+
+def _count_fds_cached() -> int:
+    now = time.time()
+    if now - _FD_CACHE["ts"] < _FD_TTL:
+        return _FD_CACHE["value"]
+    try:
+        total = 0
+        for p in psutil.process_iter():
+            try:
+                total += p.num_fds()
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                continue
+        _FD_CACHE["value"] = total
+        _FD_CACHE["ts"] = now
+        return total
+    except Exception:
+        return _FD_CACHE["value"]  # старое значение лучше нуля
+
+
+def get_system_stats(force: bool = False) -> dict:
+    """CPU/RAM/disk/network/uptime. Кэшируется на _SYS_TTL секунд."""
+    now = time.time()
+    if not force and _SYS_CACHE["data"] is not None and (now - _SYS_CACHE["ts"]) < _SYS_TTL:
+        return _SYS_CACHE["data"]
+
     out = {
         "cpu": 0.0,
         "memory": {"used": 0, "total": 0, "percent": 0.0},
@@ -357,9 +416,13 @@ def get_system_stats() -> dict:
         "available": False,
     }
     if psutil is None:
+        _SYS_CACHE["data"] = out
+        _SYS_CACHE["ts"] = now
         return out
     try:
-        out["cpu"] = psutil.cpu_percent(interval=0.1)
+        # interval=None — мгновенный снимок относительно предыдущего вызова.
+        # На первом вызове даст 0.0, но в долгоживущем worker это случается один раз.
+        out["cpu"] = psutil.cpu_percent(interval=None)
         vm = psutil.virtual_memory()
         out["memory"] = {"used": vm.used, "total": vm.total, "percent": vm.percent}
         du = psutil.disk_usage("/")
@@ -373,20 +436,18 @@ def get_system_stats() -> dict:
             out["connections"] = len(psutil.net_connections(kind="inet"))
         except Exception:
             out["connections"] = 0
-        try:
-            out["fd"] = sum(p.num_fds() for p in psutil.process_iter(["pid"])
-                            if p.info.get("pid"))
-        except Exception:
-            out["fd"] = 0
+        out["fd"] = _count_fds_cached()
         out["uptime_sec"] = int(time.time() - psutil.boot_time())
         if hasattr(os, "getloadavg"):
             out["load_avg"] = os.getloadavg()
-        # Сетевой трафик (общий, не дельта — для пиковой сводки достаточно)
         nio = psutil.net_io_counters()
         out["net"] = {"in": nio.bytes_recv, "out": nio.bytes_sent}
         out["available"] = True
     except Exception:
         pass
+
+    _SYS_CACHE["data"] = out
+    _SYS_CACHE["ts"] = now
     return out
 
 
@@ -2547,10 +2608,17 @@ def settings_password():
 
 # ===== System =====
 
+def _invalidate_xray_caches():
+    _XRAY_ACTIVE_CACHE["ts"] = 0.0
+    _USER_STATS_CACHE["ts"] = 0.0
+    _INBOUND_STATS_CACHE["ts"] = 0.0
+
+
 @app.route("/system/restart", methods=["POST"])
 @login_required
 def system_restart():
     ok, msg = systemctl("restart")
+    _invalidate_xray_caches()
     flash("xray перезапущен" if ok else f"ошибка: {msg}", "success" if ok else "error")
     push_activity("xray", "xray перезапущен")
     return redirect(request.referrer or url_for("dashboard"))
@@ -2560,6 +2628,7 @@ def system_restart():
 @login_required
 def system_start():
     ok, msg = systemctl("start")
+    _invalidate_xray_caches()
     flash("xray запущен" if ok else f"ошибка: {msg}", "success" if ok else "error")
     push_activity("xray", "xray запущен")
     return redirect(request.referrer or url_for("dashboard"))
@@ -2569,6 +2638,7 @@ def system_start():
 @login_required
 def system_stop():
     ok, msg = systemctl("stop")
+    _invalidate_xray_caches()
     flash("xray остановлен" if ok else f"ошибка: {msg}", "success" if ok else "error")
     push_activity("xray", "xray остановлен")
     return redirect(request.referrer or url_for("dashboard"))
