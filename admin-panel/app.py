@@ -308,7 +308,7 @@ def get_xray_stats(reset: bool = False) -> dict[str, dict]:
                 email = parts[1]
                 direction = parts[3]
                 try:
-                    val = int(s["value"])
+                    val = int(s.get("value", 0) or 0)
                 except (TypeError, ValueError):
                     val = 0
                 result.setdefault(email, {})[direction] = val
@@ -332,7 +332,7 @@ def get_inbound_stats() -> dict[str, dict]:
                 tag = parts[1]
                 direction = parts[3]
                 try:
-                    val = int(s["value"])
+                    val = int(s.get("value", 0) or 0)
                 except (TypeError, ValueError):
                     val = 0
                 result.setdefault(tag, {})[direction] = val

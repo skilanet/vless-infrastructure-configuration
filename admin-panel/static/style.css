@@ -279,6 +279,11 @@ a{ color: inherit; text-decoration: none; }
 }
 .input.mono, .textarea.mono{ font-family:'JetBrains Mono', monospace; font-size: 12.5px; }
 .input:disabled, .input[readonly]{ background: var(--surface-2); color: var(--muted); }
+input[type="checkbox"], input[type="radio"]{
+  accent-color: var(--accent);
+  width: 16px; height: 16px;
+  cursor: pointer;
+}
 .input-row{ display:flex; gap: 8px; }
 .input-row .input{ flex: 1; }
 .textarea{ resize: vertical; min-height: 70px; }

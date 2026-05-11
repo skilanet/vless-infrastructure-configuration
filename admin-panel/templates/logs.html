@@ -31,7 +31,7 @@
         </div>
     </div>
 
-    <div class="card" id="log-card" style="padding:6px 0; max-height: 600px; overflow:auto">
+    <div class="card" id="log-card" style="padding:6px 0; max-height: 70vh; overflow:auto; contain: strict; content-visibility: auto;">
         <div id="log-body">
             <div class="empty" style="padding: 40px 24px">
                 <div class="empty-sub">загружаем…</div>
@@ -45,6 +45,8 @@
 <script>
 (function(){
     var kind = {{ kind|tojson }};
+    var accessPath = {{ access_path|tojson }};
+    var errorPath = {{ error_path|tojson }};
     var body = document.getElementById('log-body');
     var card = document.getElementById('log-card');
     var input = document.getElementById('filter-q');
@@ -53,84 +55,127 @@
     var clearBtn = document.getElementById('clear-view');
     var auto = true;
     var timer;
+    var inFlight = false;
     var allLines = [];
+    var renderScheduled = false;
+    var debounceTimer;
+    var TAIL = 120;
+    var INTERVAL_MS = 8000;
 
-    function escape(s){
-        return (s == null ? '' : String(s)).replace(/[&<>"']/g, function(c){
-            return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
-        });
+    function isPinnedBottom(){
+        // Если юзер скроллил вверх дальше 40px — считаем "смотрит старое",
+        // авто-обновление продолжается, но scrollTop не сбрасываем.
+        return (card.scrollHeight - card.scrollTop - card.clientHeight) < 40;
     }
 
-    function renderAccess(lines){
-        var q = (input.value || '').toLowerCase();
-        var html = '';
-        var matched = 0;
-        lines.forEach(function(l){
-            var raw = (l.raw || '').toLowerCase();
-            if (q && raw.indexOf(q) === -1) return;
-            matched++;
-            html += '<div class="log-line">'
-                + '<span class="time">' + escape(l.ts) + '</span>'
-                + '<span class="kind ' + escape(l.kind) + '">' + escape(l.kind) + '</span>'
-                + '<span class="body">'
-                + (l.src ? '<span style="color:var(--ink)">' + escape(l.src) + '</span>' : '')
-                + (l.dst ? '<span style="color:var(--muted-2)"> → </span><span style="color:var(--ink)">' + escape(l.dst) + '</span>' : '')
-                + (l.user ? ' <span style="color:var(--muted)">(' + escape(l.user)
-                          + (l.inbound ? ', ' + escape(l.inbound) : '')
-                          + (l.outbound ? ' → ' + escape(l.outbound) : '')
-                          + ')</span>' : '')
-                + '</span>'
-                + '</div>';
-        });
-        if (matched === 0){
-            html = '<div class="empty" style="padding: 40px 24px"><div class="empty-sub">Ничего не нашли</div></div>';
+    function makeAccessNode(l){
+        var line = document.createElement('div');
+        line.className = 'log-line';
+        var t = document.createElement('span');
+        t.className = 'time';
+        t.textContent = l.ts || '';
+        line.appendChild(t);
+        var k = document.createElement('span');
+        k.className = 'kind ' + (l.kind || '');
+        k.textContent = l.kind || '';
+        line.appendChild(k);
+        var b = document.createElement('span');
+        b.className = 'body';
+        if (l.src){
+            var s = document.createElement('span'); s.style.color = 'var(--ink)';
+            s.textContent = l.src; b.appendChild(s);
         }
-        body.innerHTML = html;
+        if (l.dst){
+            var arr = document.createElement('span'); arr.style.color = 'var(--muted-2)';
+            arr.textContent = ' → '; b.appendChild(arr);
+            var d = document.createElement('span'); d.style.color = 'var(--ink)';
+            d.textContent = l.dst; b.appendChild(d);
+        }
+        if (l.user){
+            var u = document.createElement('span'); u.style.color = 'var(--muted)';
+            var meta = ' (' + l.user;
+            if (l.inbound) meta += ', ' + l.inbound;
+            if (l.outbound) meta += ' → ' + l.outbound;
+            meta += ')';
+            u.textContent = meta;
+            b.appendChild(u);
+        }
+        line.appendChild(b);
+        return line;
     }
 
-    function renderError(lines){
+    function makeErrorNode(l){
+        var line = document.createElement('div');
+        line.className = 'log-line';
+        var t = document.createElement('span');
+        t.className = 'time'; t.textContent = l.ts || '';
+        var k = document.createElement('span');
+        k.className = 'kind ' + (l.level || '');
+        k.textContent = l.level || '';
+        var b = document.createElement('span');
+        b.className = 'body'; b.textContent = l.body || l.raw || '';
+        line.appendChild(t); line.appendChild(k); line.appendChild(b);
+        return line;
+    }
+
+    function render(){
         var q = (input.value || '').toLowerCase();
-        var html = '';
+        var maker = kind === 'access' ? makeAccessNode : makeErrorNode;
+        var frag = document.createDocumentFragment();
         var matched = 0;
-        lines.forEach(function(l){
-            var raw = (l.raw || '').toLowerCase();
-            if (q && raw.indexOf(q) === -1) return;
+        for (var i = 0; i < allLines.length; i++){
+            var l = allLines[i];
+            if (q){
+                var raw = (l.raw || '').toLowerCase();
+                if (raw.indexOf(q) === -1) continue;
+            }
             matched++;
-            html += '<div class="log-line">'
-                + '<span class="time">' + escape(l.ts) + '</span>'
-                + '<span class="kind ' + escape(l.level) + '">' + escape(l.level) + '</span>'
-                + '<span class="body">' + escape(l.body) + '</span>'
-                + '</div>';
-        });
-        if (matched === 0){
-            html = '<div class="empty" style="padding: 40px 24px"><div class="empty-sub">Ничего не нашли</div></div>';
+            frag.appendChild(maker(l));
         }
-        body.innerHTML = html;
+        var pinned = isPinnedBottom();
+        body.replaceChildren(frag);
+        if (matched === 0){
+            var em = document.createElement('div');
+            em.className = 'empty'; em.style.padding = '40px 24px';
+            em.innerHTML = '<div class="empty-sub">Ничего не нашли</div>';
+            body.appendChild(em);
+        }
+        if (pinned) card.scrollTop = card.scrollHeight;
+    }
+
+    function showEmpty(message){
+        var em = document.createElement('div');
+        em.className = 'empty';
+        em.innerHTML = '<div class="empty-sub"></div>';
+        em.querySelector('.empty-sub').textContent = message;
+        body.replaceChildren(em);
     }
 
     function load(){
-        fetch('/api/logs/' + kind + '?n=300').then(function(r){ return r.json(); }).then(function(d){
-            if (d.error){
-                body.innerHTML = '<div class="empty"><div class="empty-sub">' + escape(d.error) + '</div></div>';
+        if (inFlight) return;
+        inFlight = true;
+        fetch('/api/logs/' + kind + '?n=' + TAIL).then(function(r){ return r.json(); }).then(function(d){
+            inFlight = false;
+            if (d.error){ showEmpty(d.error); return; }
+            if (!d.exists){
+                showEmpty('Файл не найден: ' + (kind === 'access' ? accessPath : errorPath));
+                allLines = [];
                 return;
             }
             allLines = d.lines || [];
-            if (!d.exists){
-                body.innerHTML = '<div class="empty"><div class="empty-ic">⚠</div><div class="empty-title">Файл не найден</div><div class="empty-sub">' + (kind === 'access' ? {{ access_path|tojson }} : {{ error_path|tojson }}) + '</div></div>';
-                return;
-            }
-            if (kind === 'access') renderAccess(allLines); else renderError(allLines);
+            render();
         }).catch(function(e){
-            body.innerHTML = '<div class="empty"><div class="empty-sub">' + escape(e.message) + '</div></div>';
+            inFlight = false;
+            showEmpty(e.message);
         });
     }
 
     function startAuto(){
         clearInterval(timer);
-        timer = setInterval(load, 5000);
+        timer = setInterval(load, INTERVAL_MS);
         autoBtn.textContent = '⏸ Pause auto-refresh';
         autoBtn.classList.add('accent');
-        autoState.innerHTML = '<span class="dot green pulse"></span> обновляется каждые 5с';
+        autoState.innerHTML = '<span class="dot green pulse"></span> обновляется каждые ' + (INTERVAL_MS/1000) + 'с';
         auto = true;
     }
     function stopAuto(){
@@ -145,10 +190,18 @@
         if (auto) stopAuto(); else { startAuto(); load(); }
     });
     clearBtn.addEventListener('click', function(){
-        body.innerHTML = '';
+        allLines = [];
+        body.replaceChildren();
     });
     input.addEventListener('input', function(){
-        if (kind === 'access') renderAccess(allLines); else renderError(allLines);
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(render, 120);
+    });
+
+    // Пауза polling, пока вкладка скрыта — экономит CPU/трафик и DOM-работу.
+    document.addEventListener('visibilitychange', function(){
+        if (document.hidden) clearInterval(timer);
+        else if (auto) { startAuto(); load(); }
     });
 
     load();
