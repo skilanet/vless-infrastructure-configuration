@@ -23,7 +23,7 @@ from ..config import (ALERTS_FILE, BACKUPS_DIR, CONFIG_DIR, CONFIG_FILE,
                       DEFAULT_SOCKS_PORT, DEFAULT_THRESHOLDS,
                       GEOIP_FILE, GEOSITE_FILE,
                       get_panel_config, save_panel_config)
-from ..geo import geo_metadata
+from ..geo import geo_metadata, reset_reader as reset_geo_reader
 from ..state import write_config_file
 from ..system import invalidate_xray_caches, is_xray_active, systemctl
 from ..templates_base import (base_config_template, base_infra_status,
@@ -211,6 +211,38 @@ def settings_geoip_update():
         else:
             flash(f"скачаны: {', '.join(updated)}, но xray не стартует: {msg}", "error")
         push_activity("settings", "Обновлена GeoIP-база", ", ".join(updated))
+    return redirect(url_for("sys.settings", tab="geoip"))
+
+
+@bp.route("/settings/mmdb/update", methods=["POST"])
+@login_required
+def settings_mmdb_update():
+    """Качаем GeoLite2-City.mmdb из публичного зеркала P3TERX/GeoLite.mmdb
+    (github, без регистрации, ежедневный auto-update)."""
+    if requests is None:
+        flash("модуль requests не установлен", "error")
+        return redirect(url_for("sys.settings", tab="geoip"))
+    target = Path("/var/lib/xray-admin/GeoLite2-City.mmdb")
+    url = "https://github.com/P3TERX/GeoLite.mmdb/releases/latest/download/GeoLite2-City.mmdb"
+    try:
+        r = requests.get(url, timeout=120, stream=True,
+                         allow_redirects=True,
+                         headers={"User-Agent": "xray-admin-panel"})
+        if not r.ok:
+            flash(f"скачивание вернуло HTTP {r.status_code}", "error")
+            return redirect(url_for("sys.settings", tab="geoip"))
+        target.parent.mkdir(parents=True, exist_ok=True)
+        tmp = target.with_suffix(".tmp")
+        with tmp.open("wb") as f:
+            for chunk in r.iter_content(65536):
+                f.write(chunk)
+        tmp.replace(target)
+        reset_geo_reader()
+        flash(f"GeoLite2-City.mmdb обновлён ({target.stat().st_size // 1024} KB)", "success")
+        push_activity("settings", "Обновлена GeoLite2-City.mmdb",
+                      "из P3TERX/GeoLite.mmdb")
+    except Exception as e:
+        flash(f"ошибка скачивания: {e}", "error")
     return redirect(url_for("sys.settings", tab="geoip"))
 
 

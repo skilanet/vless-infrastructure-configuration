@@ -45,6 +45,19 @@ def _open_reader():
     return None
 
 
+def reset_reader():
+    """Сбросить кэш ридера (после обновления файла на диске)."""
+    global _GEO_READER, _GEO_PATH
+    try:
+        if _GEO_READER is not None:
+            _GEO_READER.close()
+    except Exception:
+        pass
+    _GEO_READER = None
+    _GEO_PATH = None
+    _GEO_CACHE.clear()
+
+
 def geo_metadata() -> dict:
     r = _open_reader()
     if r is None or _GEO_PATH is None:
