@@ -44,6 +44,12 @@ fi
 chown -R "$PANEL_USER:$XRAY_USER" "$PANEL_DIR"
 chmod -R 750 "$PANEL_DIR"
 
+# === State directory (writable by the panel) ===
+# /etc/xray-admin is 750 root:panel — read-only for the panel.
+# State (alerts.json, activity.json, backups/) lives here and is writable.
+install -d -m 750 -o "$PANEL_USER" -g "$PANEL_USER" /var/lib/xray-admin
+install -d -m 750 -o "$PANEL_USER" -g "$PANEL_USER" /var/lib/xray-admin/backups
+
 # === Создаём venv и ставим зависимости ===
 log_info "создаю virtualenv..."
 sudo -u "$PANEL_USER" python3 -m venv "$PANEL_DIR/venv"
@@ -161,6 +167,7 @@ ExecStart=$PANEL_DIR/venv/bin/gunicorn \\
     --access-logfile - \\
     --error-logfile - \\
     --worker-tmp-dir /dev/shm \\
+    --control-socket-path /tmp/xray-admin-control.sock \\
     app:app
 Restart=on-failure
 RestartSec=5s
@@ -178,7 +185,7 @@ RestartSec=5s
 PrivateTmp=true
 PrivateDevices=true
 ProtectSystem=strict
-ReadWritePaths=/usr/local/etc/xray /var/log/xray-admin /etc/xray-admin
+ReadWritePaths=/usr/local/etc/xray /var/log/xray-admin /etc/xray-admin /var/lib/xray-admin
 ProtectHome=true
 ProtectKernelTunables=true
 ProtectKernelModules=true

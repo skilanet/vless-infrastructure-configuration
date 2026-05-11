@@ -1,81 +1,253 @@
 {% extends "base.html" %}
-{% block title %}Dashboard — xray-admin{% endblock %}
+{% block title %}Обзор — xray-admin{% endblock %}
 
 {% block content %}
-<h1>Dashboard</h1>
-
-<section class="status-cards">
-    <div class="status-card {% if xray_active %}status-ok{% else %}status-warn{% endif %}">
-        <div class="status-label">xray status</div>
-        <div class="status-value">
-            {% if xray_active %}● running{% else %}● stopped{% endif %}
+<div class="stack">
+    <div class="row" style="padding:4px 4px 6px">
+        <div>
+            <h1 class="page-title">Обзор сервера</h1>
+            <div class="page-sub mono">{{ server_hostname }} · {{ server_ip }}</div>
+        </div>
+        <div class="right row" style="gap:8px">
+            {% if xray_active %}
+                <form method="POST" action="{{ url_for('system_restart') }}" style="display:inline">
+                    <button type="submit" class="btn">{% include "_icons/reload.svg" %} Перезапустить xray</button>
+                </form>
+                <form method="POST" action="{{ url_for('system_stop') }}" style="display:inline"
+                      onsubmit="return confirm('Остановить xray? Клиенты потеряют связь.');">
+                    <button type="submit" class="btn danger">{% include "_icons/power.svg" %} Остановить</button>
+                </form>
+            {% else %}
+                <form method="POST" action="{{ url_for('system_start') }}" style="display:inline">
+                    <button type="submit" class="btn accent">{% include "_icons/power.svg" %} Запустить xray</button>
+                </form>
+            {% endif %}
         </div>
     </div>
 
-    <div class="status-card">
-        <div class="status-label">configs</div>
-        <div class="status-value">{{ config_count }} files</div>
-    </div>
-
-    <div class="status-card">
-        <div class="status-label">inbounds</div>
-        <div class="status-value">{{ inbounds|length }}</div>
-    </div>
-
-    <div class="status-card">
-        <div class="status-label">users</div>
-        <div class="status-value">{{ users|length }}</div>
-    </div>
-</section>
-
-<section class="actions-row">
-    {% if xray_active %}
-        <form method="POST" action="{{ url_for('system_restart') }}" class="inline-form">
-            <button type="submit">Restart xray</button>
-        </form>
-        <form method="POST" action="{{ url_for('system_stop') }}" class="inline-form">
-            <button type="submit" class="btn-danger">Stop xray</button>
-        </form>
-    {% else %}
-        <form method="POST" action="{{ url_for('system_start') }}" class="inline-form">
-            <button type="submit" class="btn-success">Start xray</button>
-        </form>
-    {% endif %}
-</section>
-
-{% if not inbounds %}
-<section class="welcome">
-    <h2>Сервер только что установлен</h2>
-    <p>Создай свой первый VLESS-инбаунд:</p>
-    <a href="{{ url_for('inbounds_new') }}" class="btn-primary">+ Создать первый inbound</a>
-</section>
-{% else %}
-<section>
-    <h2>Inbounds (краткий список)</h2>
-    <table class="data-table">
-        <thead>
-            <tr>
-                <th>Tag</th>
-                <th>Port</th>
-                <th>Protocol</th>
-                <th>Transport</th>
-                <th>Clients</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for ib in inbounds %}
-            {% set ss = ib.streamSettings | default({}) %}
-            {% set settings = ib.settings | default({}) %}
-            <tr>
-                <td><code>{{ ib.tag }}</code></td>
-                <td>{{ ib.port }}</td>
-                <td>{{ ib.protocol }}</td>
-                <td>{{ ss.network | default('—') }}</td>
-                <td>{{ (settings.clients | default([])) | length }}</td>
-            </tr>
+    {% if alerts %}
+    <div class="stack" style="gap:8px">
+        <div class="row" style="padding:0 4px">
+            <div style="font-size:11px; text-transform:uppercase; letter-spacing:.12em; color:var(--muted)">Needs Attention</div>
+            <div class="right">
+                <a class="btn sm ghost" href="{{ url_for('alerts_view') }}">Все алёрты →</a>
+            </div>
+        </div>
+        <div class="grid-2">
+            {% for a in alerts[:4] %}
+            <a href="{{ url_for('alerts_view') }}" class="na-card {{ a.severity }}">
+                <span class="sev-mark {% if a.severity == 'critical' %}red{% elif a.severity == 'warning' %}amber{% else %}green{% endif %}">
+                    {% include "_icons/alert.svg" %}
+                </span>
+                <div style="min-width:0">
+                    <div class="na-title">{{ a.title }}</div>
+                    <div class="na-sub">{{ a.sub }}</div>
+                </div>
+                <div class="na-when">{{ fmt_humans_ago(a.first_seen) }}</div>
+            </a>
             {% endfor %}
-        </tbody>
-    </table>
-</section>
-{% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="grid-4">
+        <div class="stat {% if xray_active %}alive{% else %}dead{% endif %}">
+            <div class="row" style="gap:8px">
+                <span class="dot {% if xray_active %}green{% else %}red{% endif %}"></span>
+                <div class="label">xray status</div>
+            </div>
+            <div class="val" style="display:flex; align-items:baseline; gap:8px">
+                {{ 'running' if xray_active else 'stopped' }}
+                <span class="mono" style="font-size:11.5px; color:var(--muted)">{{ xray_version }}</span>
+            </div>
+            <div class="delta">uptime {{ xray_uptime }} · pid {{ xray_pid }}</div>
+        </div>
+        <div class="stat">
+            <div class="label">config files</div>
+            <div class="val">{{ config_count }} <span class="u">файлов</span></div>
+            <div class="delta">/usr/local/etc/xray/conf.d</div>
+        </div>
+        <div class="stat">
+            <div class="label">inbounds</div>
+            <div class="val">{{ inbounds|length }} <span class="u">· {{ vless_count }} vless</span></div>
+            <div class="delta">{{ service_count }} service · {{ vless_count }} user-facing</div>
+        </div>
+        <div class="stat">
+            <div class="label">users</div>
+            <div class="val">{{ users_count }} <span class="u">{{ 'активных' if users_count else 'нет' }}</span></div>
+            <div class="delta">↑ {{ fmt_bytes(total_up) }} · ↓ {{ fmt_bytes(total_down) }}</div>
+        </div>
+    </div>
+
+    <div class="grid-main">
+        <div class="stack">
+            <div class="card pad">
+                <h3 style="margin:0 0 10px; font-size:14px; font-weight:600">Загрузка системы</h3>
+                {% set sys = sys_stats %}
+                <div class="grid-2" style="gap:16px">
+                    <div>
+                        <div class="row" style="margin-bottom:6px">
+                            <span style="font-size:12px; color:var(--muted)">CPU</span>
+                            <span class="right mono" style="font-size:12px">{{ '%.1f'|format(sys.cpu) }}%</span>
+                        </div>
+                        <div class="pbar {% if sys.cpu > 80 %}red{% elif sys.cpu > 60 %}amber{% endif %}"><i style="width: {{ sys.cpu }}%"></i></div>
+                    </div>
+                    <div>
+                        <div class="row" style="margin-bottom:6px">
+                            <span style="font-size:12px; color:var(--muted)">Memory</span>
+                            <span class="right mono" style="font-size:12px">{{ '%.1f'|format(sys.memory.percent) }}%</span>
+                        </div>
+                        <div class="pbar {% if sys.memory.percent > 80 %}red{% elif sys.memory.percent > 60 %}amber{% endif %}"><i style="width: {{ sys.memory.percent }}%"></i></div>
+                    </div>
+                    <div>
+                        <div class="row" style="margin-bottom:6px">
+                            <span style="font-size:12px; color:var(--muted)">Disk</span>
+                            <span class="right mono" style="font-size:12px">{{ '%.1f'|format(sys.disk.percent) }}%</span>
+                        </div>
+                        <div class="pbar {% if sys.disk.percent > 85 %}red{% elif sys.disk.percent > 70 %}amber{% endif %}"><i style="width: {{ sys.disk.percent }}%"></i></div>
+                    </div>
+                    <div>
+                        <div class="row" style="margin-bottom:6px">
+                            <span style="font-size:12px; color:var(--muted)">Steal time</span>
+                            <span class="right mono" style="font-size:12px">{{ '%.1f'|format(sys.steal) }}%</span>
+                        </div>
+                        <div class="pbar {% if sys.steal > 25 %}red{% elif sys.steal > 15 %}amber{% endif %}"><i style="width: {{ sys.steal }}%"></i></div>
+                    </div>
+                </div>
+                {% if not sys.available %}
+                <div class="banner warn" style="margin-top:12px">
+                    {% include "_icons/alert.svg" %}
+                    <span>psutil не установлен — системные метрики недоступны.</span>
+                </div>
+                {% endif %}
+            </div>
+
+            <div class="grid-2">
+                <div class="card">
+                    <div class="card-h">
+                        <h3>Top пользователи</h3>
+                        <span class="sub">по трафику</span>
+                        <div class="right"><a class="btn sm ghost" href="{{ url_for('users_list') }}">Все →</a></div>
+                    </div>
+                    <div style="padding:10px 18px 16px">
+                        {% set max_user = 1 %}
+                        {% for u in top_users %}
+                            {% if (u.uplink + u.downlink) > max_user %}{% set max_user = u.uplink + u.downlink %}{% endif %}
+                        {% endfor %}
+                        {% if top_users %}
+                            {% for u in top_users %}
+                            {% set total = u.uplink + u.downlink %}
+                            {% set pct = (total * 100 // max_user) if max_user else 2 %}
+                            <div class="hbar-row">
+                                <div class="hbar-label">
+                                    <div class="avatar" style="width:22px; height:22px; font-size:10px">{{ u.email[:1] | upper }}</div>
+                                    <span class="hbar-name">{{ u.email }}</span>
+                                </div>
+                                <div class="hbar-track"><div class="hbar-fill" style="width: {{ pct if pct > 2 else 2 }}%"></div></div>
+                                <div class="hbar-val mono">{{ fmt_bytes(total) }}</div>
+                            </div>
+                            {% endfor %}
+                        {% else %}
+                            <div class="empty" style="padding:24px 0">
+                                <div class="empty-sub">пока нет статистики по юзерам</div>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-h">
+                        <h3>Активность</h3>
+                        <span class="sub">последние действия</span>
+                    </div>
+                    <div style="padding:4px 18px 14px">
+                        {% if activity %}
+                            {% for a in activity %}
+                            <div class="act-item">
+                                <div class="act-dot {% if a.kind == 'inbound' or a.kind == 'outbound' or a.kind == 'routing' %}green{% elif a.kind == 'xray' %}amber{% elif a.kind == 'backup' or a.kind == 'settings' %}{% else %}{% endif %}">
+                                    {% include "_icons/edit.svg" %}
+                                </div>
+                                <div style="min-width:0">
+                                    <div class="act-title">{{ a.title }}</div>
+                                    {% if a.sub %}<div class="act-sub mono">{{ a.sub }}</div>{% endif %}
+                                </div>
+                                <div class="act-time">{{ fmt_humans_ago(a.t) }}</div>
+                            </div>
+                            {% endfor %}
+                        {% else %}
+                            <div class="empty" style="padding:24px 0">
+                                <div class="empty-sub">пока тишина — действия будут появляться здесь</div>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-h">
+                    <h3>Inbounds</h3>
+                    <span class="sub">{{ inbounds|length }} правил</span>
+                    <div class="right"><a class="btn sm" href="{{ url_for('inbounds_list') }}">Открыть всё →</a></div>
+                </div>
+                {% if inbounds %}
+                <table class="table compact">
+                    <thead><tr>
+                        <th>Tag</th><th>Порт</th><th>Proto</th><th>Transport</th><th>SNI</th><th style="text-align:right">Клиенты</th>
+                    </tr></thead>
+                    <tbody>
+                    {% for r in inbounds %}
+                    <tr>
+                        <td><span class="chip mono">{{ r.tag }}</span></td>
+                        <td class="mono">{{ r.port }}</td>
+                        <td><span class="chip {% if r.proto == 'vless' %}accent{% else %}outline{% endif %}">{{ r.proto }}</span></td>
+                        <td>
+                            {% if r.transport == '—' %}<span class="em-dash">—</span>
+                            {% else %}<span class="chip">{{ r.transport }}{% if r.mode %} · {{ r.mode }}{% endif %}</span>{% endif %}
+                        </td>
+                        <td>
+                            {% if r.sni %}<span class="mono" style="font-size:12.5px">{{ r.sni }}</span>
+                            {% else %}<span class="em-dash">—</span>{% endif %}
+                        </td>
+                        <td style="text-align:right">
+                            {% if r.service %}<span class="chip">service</span>{% else %}<b>{{ r.clients }}</b>{% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <div class="empty">
+                    <div class="empty-ic">{% include "_icons/inbound.svg" %}</div>
+                    <div class="empty-title">Пока нет ни одного inbound'а</div>
+                    <div class="empty-sub">Создай первый VLESS-инбаунд с маскировкой Reality</div>
+                    <a class="btn accent" href="{{ url_for('inbounds_new') }}">{% include "_icons/plus.svg" %} Новый inbound</a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="stack" style="position:sticky; top:24px">
+            <div class="card pad">
+                <h3 style="margin:0 0 10px; font-size:14px; font-weight:600">Состояние</h3>
+                <div class="meta-row"><span class="k">Hostname</span><span class="mono">{{ server_hostname }}</span></div>
+                <div class="meta-row"><span class="k">IP</span><span class="mono">{{ server_ip }}</span></div>
+                <div class="meta-row"><span class="k">Active conns</span><span class="mono">{{ sys_stats.connections }}</span></div>
+                <div class="meta-row"><span class="k">FD count</span><span class="mono">{{ sys_stats.fd }}</span></div>
+                <div class="meta-row"><span class="k">Load avg</span>
+                    <span class="mono">{{ '%.2f'|format(sys_stats.load_avg[0]) }} / {{ '%.2f'|format(sys_stats.load_avg[1]) }} / {{ '%.2f'|format(sys_stats.load_avg[2]) }}</span>
+                </div>
+            </div>
+
+            <div class="card pad">
+                <h3 style="margin:0 0 10px; font-size:14px; font-weight:600">Быстрые действия</h3>
+                <div class="stack" style="gap:8px">
+                    <a class="btn" href="{{ url_for('inbounds_new') }}" style="justify-content:flex-start">{% include "_icons/plus.svg" %} Создать inbound</a>
+                    <a class="btn" href="{{ url_for('users_new') }}" style="justify-content:flex-start">{% include "_icons/plus.svg" %} Создать юзера</a>
+                    <a class="btn" href="{{ url_for('routing_list') }}" style="justify-content:flex-start">{% include "_icons/shield.svg" %} Правила маршрутизации</a>
+                    <a class="btn" href="{{ url_for('logs_view') }}" style="justify-content:flex-start">{% include "_icons/file.svg" %} Просмотреть логи</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}

@@ -1,0 +1,176 @@
+{% extends "base.html" %}
+{% set is_edit = mode == 'edit' %}
+{% block title %}{% if is_edit %}Edit{% else %}New{% endif %} outbound — xray-admin{% endblock %}
+
+{% block content %}
+<div class="stack">
+    <div class="row">
+        <a class="btn ghost" href="{{ url_for('outbounds_list') }}">{% include "_icons/back.svg" %} Outbounds</a>
+        <div class="right row" style="gap:8px">
+            <a class="btn" href="{{ url_for('outbounds_list') }}">Отмена</a>
+            <button type="submit" form="ob-form" class="btn accent">{{ 'Сохранить' if is_edit else 'Создать outbound' }}</button>
+        </div>
+    </div>
+    <div>
+        <h1 class="page-title">
+            {% if is_edit %}Редактирование <span style="color:var(--muted)">{{ outbound.tag }}</span>
+            {% else %}Новый outbound
+            {% endif %}
+        </h1>
+        <div class="page-sub">направление исходящего трафика — добавится в <span class="mono">02-outbounds.json</span></div>
+    </div>
+
+    <form method="POST" id="ob-form" class="card pad" style="max-width: 820px">
+        <div class="form-grid">
+            <div class="field">
+                <label>Tag <span class="req">*</span></label>
+                <input class="input mono" type="text" name="tag" required pattern="[a-z0-9][a-z0-9\-]*" maxlength="30"
+                       value="{{ outbound.tag if outbound else '' }}" placeholder="proxy-de">
+                <div class="hint">уникальное имя, используется в routing rules</div>
+            </div>
+            <div class="field">
+                <label>Protocol <span class="req">*</span></label>
+                <select class="select" name="protocol" id="proto-select" {% if is_edit %}disabled{% endif %}>
+                    {% for code, label in protocols %}
+                    <option value="{{ code }}" {% if outbound and outbound.protocol == code %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+                {% if is_edit %}<input type="hidden" name="protocol" value="{{ outbound.protocol }}">{% endif %}
+            </div>
+        </div>
+
+        <hr class="sep">
+
+        {# freedom #}
+        <div class="proto-block" data-for="freedom" style="display:none">
+            <div class="field">
+                <label>Domain strategy</label>
+                <select class="select" name="domain_strategy">
+                    <option value="UseIPv4" {% if outbound and outbound.domain_strategy == 'UseIPv4' %}selected{% endif %}>UseIPv4</option>
+                    <option value="UseIPv6" {% if outbound and outbound.domain_strategy == 'UseIPv6' %}selected{% endif %}>UseIPv6</option>
+                    <option value="AsIs" {% if outbound and outbound.domain_strategy == 'AsIs' %}selected{% endif %}>AsIs</option>
+                </select>
+            </div>
+        </div>
+
+        {# blackhole #}
+        <div class="proto-block" data-for="blackhole" style="display:none">
+            <div class="banner">
+                {% include "_icons/alert.svg" %}
+                <span>blackhole не требует настроек — весь трафик матченных правил будет дропаться.</span>
+            </div>
+        </div>
+
+        {# socks/http #}
+        <div class="proto-block" data-for="socks http" style="display:none">
+            <div class="form-grid">
+                <div class="field"><label>Address <span class="req">*</span></label><input class="input mono" type="text" name="address" value="{{ outbound.address if outbound else '' }}" placeholder="1.2.3.4"></div>
+                <div class="field"><label>Port <span class="req">*</span></label><input class="input mono" type="number" name="port" value="{{ outbound.port if outbound else '' }}" placeholder="1080"></div>
+                <div class="field"><label>Username</label><input class="input" type="text" name="user" value="{{ outbound.user if outbound else '' }}" placeholder="optional"></div>
+                <div class="field"><label>Password</label><input class="input" type="password" name="password" value="{{ outbound.password if outbound else '' }}" placeholder="optional"></div>
+            </div>
+        </div>
+
+        {# vless/vmess/trojan #}
+        <div class="proto-block" data-for="vless vmess trojan" style="display:none">
+            <div class="form-grid">
+                <div class="field"><label>Server address <span class="req">*</span></label><input class="input mono" type="text" name="address" value="{{ outbound.address if outbound else '' }}" placeholder="remote.server.com"></div>
+                <div class="field"><label>Port <span class="req">*</span></label><input class="input mono" type="number" name="port" value="{{ outbound.port if outbound else 443 }}"></div>
+            </div>
+            <h4 style="margin:16px 0 10px; font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.08em">Users</h4>
+            <div class="form-grid">
+                <div class="field">
+                    <label>UUID / Password</label>
+                    <div class="input-row">
+                        <input class="input mono" type="text" name="uuid" id="vless-uuid" value="{{ outbound.uuid if outbound else '' }}">
+                        <button type="button" class="btn" id="gen-uuid-ob">{% include "_icons/dice.svg" %}</button>
+                    </div>
+                </div>
+                <div class="field">
+                    <label>Flow</label>
+                    <select class="select" name="flow">
+                        <option value="">none</option>
+                        <option value="xtls-rprx-vision" {% if outbound and outbound.flow == 'xtls-rprx-vision' %}selected{% endif %}>xtls-rprx-vision</option>
+                    </select>
+                </div>
+            </div>
+            <h4 style="margin:16px 0 10px; font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.08em">Stream settings</h4>
+            <div class="form-grid">
+                <div class="field">
+                    <label>Network</label>
+                    <select class="select" name="network">
+                        <option value="tcp" {% if outbound and outbound.network == 'tcp' %}selected{% endif %}>tcp</option>
+                        <option value="ws" {% if outbound and outbound.network == 'ws' %}selected{% endif %}>ws</option>
+                        <option value="xhttp" {% if outbound and outbound.network == 'xhttp' %}selected{% endif %}>xhttp</option>
+                    </select>
+                </div>
+                <div class="field">
+                    <label>Security</label>
+                    <select class="select" name="security">
+                        <option value="reality" {% if not outbound or outbound.security == 'reality' %}selected{% endif %}>reality</option>
+                        <option value="tls" {% if outbound and outbound.security == 'tls' %}selected{% endif %}>tls</option>
+                        <option value="none" {% if outbound and outbound.security == 'none' %}selected{% endif %}>none</option>
+                    </select>
+                </div>
+                <div class="field"><label>Server name (SNI)</label><input class="input mono" type="text" name="sni" value="{{ outbound.sni if outbound else '' }}" placeholder="www.spotify.com"></div>
+                <div class="field"><label>Public key</label><input class="input mono" type="text" name="public_key" value="{{ outbound.public_key if outbound else '' }}"></div>
+                <div class="field"><label>Short ID</label><input class="input mono" type="text" name="short_id" value="{{ outbound.short_id if outbound else '' }}"></div>
+                <div class="field">
+                    <label>Fingerprint</label>
+                    <select class="select" name="fingerprint">
+                        {% for fp in ['chrome', 'firefox', 'safari', 'ios', 'android', 'random'] %}
+                        <option value="{{ fp }}" {% if outbound and outbound.fingerprint == fp %}selected{% endif %}>{{ fp }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        {# wireguard #}
+        <div class="proto-block" data-for="wireguard" style="display:none">
+            <div class="form-grid">
+                <div class="field"><label>Endpoint</label><input class="input mono" type="text" name="address" value="{{ outbound.address if outbound else '' }}" placeholder="1.2.3.4:51820"></div>
+                <div class="field"><label>Secret key (your)</label><input class="input mono" type="text" name="uuid" value="{{ outbound.uuid if outbound else '' }}"></div>
+                <div class="field"><label>Peer public key</label><input class="input mono" type="text" name="public_key" value="{{ outbound.public_key if outbound else '' }}"></div>
+            </div>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function(){
+    var sel = document.getElementById('proto-select');
+    function updateBlocks(){
+        var v = sel.value;
+        document.querySelectorAll('.proto-block').forEach(function(b){
+            var protos = b.dataset.for.split(' ');
+            b.style.display = protos.indexOf(v) >= 0 ? '' : 'none';
+        });
+    }
+    if (sel){
+        sel.addEventListener('change', updateBlocks);
+        updateBlocks();
+    } else {
+        // edit mode — protocol disabled, show by hidden value
+        var p = document.querySelector('input[name=protocol]');
+        if (p){
+            document.querySelectorAll('.proto-block').forEach(function(b){
+                b.style.display = b.dataset.for.split(' ').indexOf(p.value) >= 0 ? '' : 'none';
+            });
+        }
+    }
+
+    var gen = document.getElementById('gen-uuid-ob');
+    var inp = document.getElementById('vless-uuid');
+    if (gen && inp){
+        gen.addEventListener('click', function(){
+            fetch('/api/generate-uuid').then(function(r){ return r.json(); }).then(function(d){
+                inp.value = d.uuid;
+            });
+        });
+    }
+})();
+</script>
+{% endblock %}

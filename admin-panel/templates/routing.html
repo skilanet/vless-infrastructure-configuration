@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{% block title %}Routing — xray-admin{% endblock %}
+
+{% block content %}
+<div class="stack">
+    <div class="row">
+        <div>
+            <h1 class="page-title">Routing</h1>
+            <div class="page-sub mono">01-routing.json — правила применяются сверху вниз</div>
+        </div>
+        <div class="right">
+            <a class="btn accent" href="{{ url_for('routing_new') }}">{% include "_icons/plus.svg" %} Новое правило</a>
+        </div>
+    </div>
+
+    <div class="banner info">
+        {% include "_icons/alert.svg" %}
+        <span><b>Порядок важен.</b> Тяни строки за ⋮⋮ чтобы менять приоритет — после перетаскивания xray перезапустится автоматически.</span>
+    </div>
+
+    <div class="card">
+        {% if rules %}
+        <table class="table" id="rules-table">
+            <thead><tr>
+                <th style="width:24px"></th><th style="width:50px">#</th><th>Match</th><th>Action</th>
+                <th style="width:80px">Enabled</th><th></th>
+            </tr></thead>
+            <tbody>
+            {% for r in rules %}
+            <tr data-idx="{{ r.idx }}" draggable="true" class="{% if not r.enabled %}row-disabled{% endif %}">
+                <td class="drag-cell">{% include "_icons/drag.svg" %}</td>
+                <td class="mono">{{ r.idx + 1 }}</td>
+                <td>
+                    {% if r.matches %}
+                    <div class="row" style="gap:6px; flex-wrap:wrap">
+                        {% for m in r.matches %}
+                        <span class="row" style="gap:4px">
+                            <span class="chip">{{ m.k }}</span>
+                            {% for v in m.v %}<span class="chip mono">{{ v }}</span>{% endfor %}
+                        </span>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <span class="em-dash">no match conditions</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <span class="row" style="gap:6px">
+                        <span style="color:var(--muted-2)">→</span>
+                        <span class="chip {% if r.action == 'block' %}red{% elif r.action == 'direct' %}green{% else %}accent{% endif %}">{{ r.action }}</span>
+                    </span>
+                </td>
+                <td>
+                    <form method="POST" action="{{ url_for('routing_toggle', idx=r.idx) }}" style="display:inline">
+                        <button type="submit" class="sw {% if r.enabled %}on{% endif %}" title="включить/выключить"></button>
+                    </form>
+                </td>
+                <td class="actions-cell">
+                    <div class="row-actions">
+                        <a class="btn sm" href="{{ url_for('routing_edit', idx=r.idx) }}">{% include "_icons/edit.svg" %}</a>
+                        <form method="POST" action="{{ url_for('routing_delete', idx=r.idx) }}" style="display:inline"
+                              onsubmit="return confirm('Удалить правило #{{ r.idx + 1 }}?');">
+                            <button type="submit" class="btn sm danger">{% include "_icons/trash.svg" %}</button>
+                        </form>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="empty">
+            <div class="empty-ic">{% include "_icons/shield.svg" %}</div>
+            <div class="empty-title">Правил маршрутизации нет</div>
+            <div class="empty-sub">Создай первое правило или применИ базовую инфраструктуру в настройках.</div>
+            <a class="btn accent" href="{{ url_for('routing_new') }}">{% include "_icons/plus.svg" %} Новое правило</a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function(){
+    var tbody = document.querySelector('#rules-table tbody');
+    if (!tbody) return;
+    var dragged = null;
+    tbody.querySelectorAll('tr').forEach(function(tr){
+        tr.addEventListener('dragstart', function(e){
+            dragged = tr;
+            tr.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'move';
+        });
+        tr.addEventListener('dragend', function(){
+            if (dragged) dragged.classList.remove('dragging');
+            dragged = null;
+            saveOrder();
+        });
+        tr.addEventListener('dragover', function(e){
+            e.preventDefault();
+            if (!dragged || dragged === tr) return;
+            var rect = tr.getBoundingClientRect();
+            var before = (e.clientY - rect.top) < rect.height / 2;
+            if (before) tbody.insertBefore(dragged, tr);
+            else tbody.insertBefore(dragged, tr.nextSibling);
+        });
+    });
+    function saveOrder(){
+        var order = Array.from(tbody.querySelectorAll('tr')).map(function(tr){
+            return parseInt(tr.dataset.idx, 10);
+        });
+        fetch('/api/routing/reorder', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({order: order}),
+        }).then(function(r){ return r.json(); }).then(function(d){
+            if (d.ok) location.reload();
+        });
+    }
+})();
+</script>
+{% endblock %}

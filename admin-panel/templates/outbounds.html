@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Outbounds — xray-admin{% endblock %}
+
+{% block content %}
+<div class="stack">
+    <div class="row">
+        <div>
+            <h1 class="page-title">Outbounds</h1>
+            <div class="page-sub mono">02-outbounds.json — направления исходящего трафика</div>
+        </div>
+        <div class="right">
+            <a class="btn accent" href="{{ url_for('outbounds_new') }}">{% include "_icons/plus.svg" %} Новый outbound</a>
+        </div>
+    </div>
+
+    <div class="card">
+        {% if outbounds %}
+        <table class="table">
+            <thead><tr>
+                <th>Tag</th><th>Protocol</th><th>Destination</th><th>Settings</th><th></th>
+            </tr></thead>
+            <tbody>
+            {% for o in outbounds %}
+            <tr>
+                <td><span class="chip mono">{{ o.tag }}</span></td>
+                <td>
+                    {% if o.proto == 'blackhole' %}<span class="chip red">{{ o.proto }}</span>
+                    {% elif o.proto == 'vless' or o.proto == 'vmess' or o.proto == 'trojan' %}<span class="chip accent">{{ o.proto }}</span>
+                    {% else %}<span class="chip outline">{{ o.proto }}</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if o.dest == '—' %}<span class="em-dash">—</span>
+                    {% else %}<span class="mono" style="font-size:12.5px">{{ o.dest }}</span>{% endif %}
+                </td>
+                <td>
+                    {% if o.summary == '—' %}<span class="em-dash">—</span>
+                    {% else %}<span style="font-size:12.5px; color:var(--muted)">{{ o.summary }}</span>{% endif %}
+                </td>
+                <td class="actions-cell">
+                    <div class="row-actions">
+                        <a class="btn sm" href="{{ url_for('outbounds_edit', tag=o.tag) }}">{% include "_icons/edit.svg" %}</a>
+                        {% if o.tag in ('direct', 'block', 'api', 'metrics') %}
+                            <span class="chip">system</span>
+                        {% else %}
+                            <form method="POST" action="{{ url_for('outbounds_delete', tag=o.tag) }}" style="display:inline"
+                                  onsubmit="return confirm('Удалить outbound «{{ o.tag }}»?');">
+                                <button type="submit" class="btn sm danger">{% include "_icons/trash.svg" %}</button>
+                            </form>
+                        {% endif %}
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="empty">
+            <div class="empty-ic">{% include "_icons/arrowup.svg" %}</div>
+            <div class="empty-title">Outbound'ов нет</div>
+            <div class="empty-sub">Применилась только базовая инфраструктура? Создай 02-outbounds.json в настройках.</div>
+            <a class="btn accent" href="{{ url_for('outbounds_new') }}">{% include "_icons/plus.svg" %} Новый outbound</a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

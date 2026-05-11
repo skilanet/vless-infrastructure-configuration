@@ -1,151 +1,277 @@
 {% extends "base.html" %}
-{% block title %}{% if mode == 'edit' %}Edit{% else %}New{% endif %} inbound — xray-admin{% endblock %}
+{% set is_edit = mode == 'edit' %}
+{% block title %}{% if is_edit %}Edit{% else %}New{% endif %} inbound — xray-admin{% endblock %}
 
 {% block content %}
-<h1>
-    {% if mode == 'edit' %}Edit inbound «{{ inbound.tag }}»{% else %}Создать VLESS-инбаунд{% endif %}
-</h1>
-
-<form method="POST" class="form-stack" id="inbound-form">
-    {% if mode == 'create' %}
-    <label>
-        Tag <span class="required">*</span>
-        <input type="text" name="tag" required pattern="[a-z0-9][a-z0-9\-]*" maxlength="30"
-               placeholder="vless-main">
-        <small>уникальное имя (латиница, цифры, дефис; не меняется после создания)</small>
-    </label>
-    {% else %}
-    <label>
-        Tag
-        <input type="text" value="{{ inbound.tag }}" readonly disabled>
-        <small>tag нельзя поменять после создания</small>
-    </label>
-    {% endif %}
-
-    <label>
-        Port <span class="required">*</span>
-        <input type="number" name="port" required min="1" max="65535" id="port-input"
-               value="{{ inbound.port if inbound else 443 }}">
-        <small id="port-hint">от 1 до 65535, не должен быть занят другим inbound'ом</small>
-    </label>
-
-    <label>
-        Transport <span class="required">*</span>
-        <select name="transport" id="transport-select" required>
-            <option value="xhttp" {% if inbound and inbound.transport == 'xhttp' %}selected{% endif %}>
-                XHTTP (HTTP/2-based, маскируется под HTTPS)
-            </option>
-            <option value="tcp" {% if inbound and inbound.transport == 'tcp' %}selected{% endif %}>
-                TCP + Vision (XTLS, максимальная скорость)
-            </option>
-        </select>
-    </label>
-
-    <label id="xhttp-mode-block">
-        XHTTP mode
-        <select name="xhttp_mode">
-            {% for m in xhttp_modes %}
-            <option value="{{ m }}" {% if inbound and inbound.xhttp_mode == m %}selected{% endif %}>
-                {{ m }}{% if m == 'stream-one' %} (быстрее, рекомендуется){% endif %}{% if m == 'packet-up' %} (стелс, максимум обфускации){% endif %}
-            </option>
-            {% endfor %}
-        </select>
-    </label>
-
-    <label>
-        Reality SNI <span class="required">*</span>
-        <select name="sni_preset" id="sni-preset">
-            {% for s in sni_options %}
-            <option value="{{ s }}" {% if inbound and inbound.sni == s %}selected{% endif %}>{{ s }}</option>
-            {% endfor %}
-            <option value="__custom__" {% if inbound and inbound.sni and inbound.sni not in sni_options %}selected{% endif %}>
-                ввести свой...
-            </option>
-        </select>
-        <input type="text" name="sni" id="sni-custom" required
-               value="{{ inbound.sni if inbound else 'yahoo.com' }}"
-               placeholder="example.com"
-               pattern="[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)+">
-        <small>домен под который маскируемся (валидный TLS 1.3 сайт)</small>
-    </label>
-
-    <label>
-        Reality dest (опционально)
-        <input type="text" name="dest"
-               value="{{ inbound.dest if inbound else '' }}"
-               placeholder="оставь пустым — резолвим SNI автоматически">
-        <small>обычно IP:443 куда проксируем не-VLESS трафик. Пусто = автоматически</small>
-    </label>
-
-    <div class="form-actions">
-        <button type="submit" class="btn-primary">
-            {% if mode == 'edit' %}Сохранить{% else %}Создать{% endif %}
-        </button>
-        <a href="{{ url_for('inbounds_list') }}" class="btn-cancel">Отмена</a>
+<div class="stack">
+    <div class="row">
+        <a class="btn ghost" href="{{ url_for('inbounds_list') }}">{% include "_icons/back.svg" %} Inbounds</a>
+        <div class="right row" style="gap:8px">
+            <a class="btn" href="{{ url_for('inbounds_list') }}">Отмена</a>
+            <button type="submit" form="inbound-form" class="btn accent">{{ 'Сохранить' if is_edit else 'Создать inbound' }}</button>
+        </div>
     </div>
-</form>
+    <div>
+        <h1 class="page-title">
+            {% if is_edit %}Редактирование <span style="color:var(--muted)">{{ inbound.tag }}</span>
+            {% else %}Новый VLESS-инбаунд
+            {% endif %}
+        </h1>
+        <div class="page-sub">VLESS + Reality, маскировка под TLS-сайт</div>
+    </div>
+
+    <form method="POST" id="inbound-form">
+    <div class="grid-main">
+        <div class="card pad">
+            <div class="form-grid">
+                <div class="field">
+                    <label>Tag <span class="req">*</span></label>
+                    {% if is_edit %}
+                        <input class="input mono" value="{{ inbound.tag }}" readonly>
+                        <input type="hidden" name="tag" value="{{ inbound.tag }}">
+                        <div class="hint">не редактируется после создания</div>
+                    {% else %}
+                        <input class="input mono" type="text" name="tag" required pattern="[a-z0-9][a-z0-9\-]*" maxlength="30" placeholder="vless-main">
+                        <div class="hint">уникальное имя (латиница, цифры, дефис)</div>
+                    {% endif %}
+                </div>
+                <div class="field">
+                    <label>Порт <span class="req">*</span></label>
+                    <input class="input mono" type="number" name="port" id="port-input" min="1" max="65535" required value="{{ inbound.port if inbound else 443 }}">
+                    <div class="hint" id="port-hint">от 1 до 65535, не должен быть занят другим inbound'ом</div>
+                </div>
+
+                <div class="field" style="grid-column: 1 / -1">
+                    <label>Transport <span class="req">*</span></label>
+                    <div class="toggle-pills">
+                        {% set cur_t = inbound.transport if inbound else 'xhttp' %}
+                        <label class="pill pill-block {% if cur_t == 'tcp' %}on{% endif %}" data-transport="tcp">
+                            <input type="radio" name="transport" value="tcp" {% if cur_t == 'tcp' %}checked{% endif %} hidden>
+                            <div class="row" style="gap:6px"><span class="x">✓</span><b>TCP</b></div>
+                            <div class="sub">классика, xtls-rprx-vision</div>
+                        </label>
+                        <label class="pill pill-block {% if cur_t == 'xhttp' %}on{% endif %}" data-transport="xhttp">
+                            <input type="radio" name="transport" value="xhttp" {% if cur_t == 'xhttp' %}checked{% endif %} hidden>
+                            <div class="row" style="gap:6px"><span class="x">✓</span><b>XHTTP</b></div>
+                            <div class="sub">HTTP/2-based, под HTTPS</div>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="field" id="xhttp-mode-block">
+                    <label>XHTTP mode</label>
+                    <select class="select" name="xhttp_mode">
+                        {% for m in xhttp_modes %}
+                        <option value="{{ m }}" {% if inbound and inbound.xhttp_mode == m %}selected{% endif %}>
+                            {{ m }}{% if m == 'stream-one' %} (быстрее, рекомендуется){% endif %}{% if m == 'packet-up' %} (стелс){% endif %}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="field">
+                    <label>Reality SNI <span class="req">*</span></label>
+                    <select class="select" id="sni-preset" name="sni_preset">
+                        {% for s in sni_options %}
+                        <option value="{{ s }}" {% if inbound and inbound.sni == s %}selected{% endif %}>{{ s }}</option>
+                        {% endfor %}
+                        <option value="__custom__" {% if inbound and inbound.sni and inbound.sni not in sni_options %}selected{% endif %}>добавить свой…</option>
+                    </select>
+                    <input class="input mono" type="text" name="sni" id="sni-custom" required value="{{ inbound.sni if inbound else 'yahoo.com' }}" placeholder="example.com" pattern="[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)+" style="margin-top:6px">
+                    <div class="hint">валидный TLS 1.3 сайт</div>
+                </div>
+
+                <div class="field">
+                    <label>Reality dest <span style="color:var(--muted-2); font-weight:500">(опционально)</span></label>
+                    <input class="input mono" type="text" name="dest" value="{{ inbound.dest if inbound else '' }}" placeholder="оставь пустым — резолвим SNI">
+                </div>
+
+                <div class="field" style="grid-column: 1 / -1">
+                    <label>Fingerprint</label>
+                    <div class="toggle-pills">
+                        {% set cur_fp = inbound.fingerprint if inbound else 'chrome' %}
+                        {% for fp in fingerprints %}
+                        <label class="pill {% if cur_fp == fp %}on{% endif %}" data-fp="{{ fp }}">
+                            <input type="radio" name="fingerprint" value="{{ fp }}" {% if cur_fp == fp %}checked{% endif %} hidden>
+                            {% if cur_fp == fp %}<span class="x">✓</span>{% endif %}{{ fp }}
+                        </label>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                {% if is_edit and inbound.public_key %}
+                <div class="field" style="grid-column: 1 / -1">
+                    <label>Reality keys</label>
+                    <div class="card pad" style="background: var(--surface-2); padding: 14px">
+                        <div class="stack" style="gap:10px">
+                            <div class="row" style="gap:10px">
+                                <span style="font-size:12px; color:var(--muted); width:60px">Public</span>
+                                <span class="mono" id="pub-key" style="font-size:12px; flex:1; overflow:hidden; text-overflow:ellipsis">{{ inbound.public_key }}</span>
+                                <button type="button" class="btn sm copy-btn" data-target="pub-key">{% include "_icons/copy.svg" %}</button>
+                            </div>
+                            <div class="row" style="gap:10px">
+                                <span style="font-size:12px; color:var(--muted); width:60px">Private</span>
+                                <span class="mono" id="priv-key" data-real="{{ inbound.private_key }}" style="font-size:12px; flex:1">●●●●●●●●●●●●●●●●●●●●●●●●●●●●●●</span>
+                                <button type="button" class="btn sm" id="toggle-priv">{% include "_icons/eye.svg" %}</button>
+                                <button type="button" class="btn sm copy-btn" data-target="priv-key">{% include "_icons/copy.svg" %}</button>
+                            </div>
+                            <label class="row" style="gap:8px; font-size:12.5px; color:var(--muted); cursor:pointer">
+                                <input type="checkbox" name="regen_keys" value="1">
+                                Перегенерировать ключи при сохранении
+                            </label>
+                            <div class="banner warn">
+                                {% include "_icons/alert.svg" %}
+                                <span>Regenerate отключит всех существующих клиентов. Им нужно будет обновить подписки.</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="stack">
+            <div class="card pad">
+                <h3 style="margin:0 0 10px; font-size:14px">Подсказка</h3>
+                <div style="font-size:12.5px; color:var(--muted); line-height:1.55">
+                    VLESS + Reality маскирует трафик под обычный HTTPS к выбранному SNI. Выбирай домен, который реально доступен с твоей IP-страны и поддерживает TLS 1.3.
+                </div>
+            </div>
+            <div class="card pad">
+                <h3 style="margin:0 0 10px; font-size:14px">Файл</h3>
+                <div class="mono" style="font-size:12px; color:var(--muted)">
+                    {% if is_edit %}{{ inbound.file }}{% else %}20-vless-&lt;tag&gt;.json{% endif %}
+                </div>
+                <div style="font-size:12px; color:var(--muted); margin-top:8px">
+                    будет {{ 'обновлён' if is_edit else 'создан' }} в /usr/local/etc/xray/conf.d/
+                </div>
+            </div>
+        </div>
+    </div>
+    </form>
+</div>
 {% endblock %}
 
 {% block scripts %}
 <script>
 (function() {
-    var transportSelect = document.getElementById('transport-select');
-    var xhttpModeBlock = document.getElementById('xhttp-mode-block');
-    var sniPreset = document.getElementById('sni-preset');
-    var sniCustom = document.getElementById('sni-custom');
-    var portInput = document.getElementById('port-input');
-    var portHint = document.getElementById('port-hint');
-    var excludeTag = {{ ('"' + inbound.tag + '"') | safe if (mode == 'edit' and inbound) else 'null' }};
-
-    function updateXhttpVisibility() {
-        xhttpModeBlock.style.display = transportSelect.value === 'xhttp' ? '' : 'none';
+    // Transport toggle-pills
+    document.querySelectorAll('.pill[data-transport]').forEach(function(p){
+        p.addEventListener('click', function(){
+            document.querySelectorAll('.pill[data-transport]').forEach(function(x){ x.classList.remove('on'); });
+            p.classList.add('on');
+            var inp = p.querySelector('input[type=radio]');
+            if (inp){ inp.checked = true; }
+            toggleXhttp();
+        });
+    });
+    function toggleXhttp(){
+        var sel = document.querySelector('input[name=transport]:checked');
+        var block = document.getElementById('xhttp-mode-block');
+        if (!block || !sel) return;
+        block.style.display = sel.value === 'xhttp' ? '' : 'none';
     }
-    transportSelect.addEventListener('change', updateXhttpVisibility);
-    updateXhttpVisibility();
+    toggleXhttp();
 
-    function syncSniFromPreset() {
-        if (sniPreset.value === '__custom__') {
-            sniCustom.removeAttribute('readonly');
-            sniCustom.focus();
+    // Fingerprint pills
+    document.querySelectorAll('.pill[data-fp]').forEach(function(p){
+        p.addEventListener('click', function(){
+            document.querySelectorAll('.pill[data-fp]').forEach(function(x){
+                x.classList.remove('on');
+                var oldX = x.querySelector('.x'); if (oldX) oldX.remove();
+            });
+            p.classList.add('on');
+            if (!p.querySelector('.x')){
+                var s = document.createElement('span');
+                s.className = 'x'; s.textContent = '✓';
+                p.insertBefore(s, p.firstChild);
+            }
+            var inp = p.querySelector('input[type=radio]');
+            if (inp){ inp.checked = true; }
+        });
+    });
+
+    // SNI preset
+    var preset = document.getElementById('sni-preset');
+    var custom = document.getElementById('sni-custom');
+    function syncSni(){
+        if (preset.value === '__custom__'){
+            custom.removeAttribute('readonly');
+            custom.focus();
         } else {
-            sniCustom.value = sniPreset.value;
-            sniCustom.setAttribute('readonly', 'readonly');
+            custom.value = preset.value;
+            custom.setAttribute('readonly', 'readonly');
         }
     }
-    sniPreset.addEventListener('change', syncSniFromPreset);
-
-    // На старте: если значение SNI не из списка пресетов — переключить на custom
-    var presetValues = Array.from(sniPreset.options).map(function(o){ return o.value; });
-    if (sniCustom.value && presetValues.indexOf(sniCustom.value) === -1) {
-        sniPreset.value = '__custom__';
+    if (preset){
+        preset.addEventListener('change', syncSni);
+        var presetValues = Array.from(preset.options).map(function(o){ return o.value; });
+        if (custom.value && presetValues.indexOf(custom.value) === -1){
+            preset.value = '__custom__';
+        }
+        if (preset.value !== '__custom__'){
+            custom.setAttribute('readonly', 'readonly');
+        }
     }
-    if (sniPreset.value !== '__custom__') {
-        sniCustom.setAttribute('readonly', 'readonly');
-    }
 
-    // Live-валидация порта
-    var portTimeout;
-    portInput.addEventListener('input', function() {
-        clearTimeout(portTimeout);
-        var port = portInput.value;
-        portTimeout = setTimeout(function() {
-            if (!port || port < 1 || port > 65535) {
-                portHint.textContent = 'порт должен быть в диапазоне 1-65535';
-                portHint.className = 'error';
-                return;
-            }
-            var url = '/api/check-port?port=' + encodeURIComponent(port);
-            if (excludeTag) url += '&exclude_tag=' + encodeURIComponent(excludeTag);
-            fetch(url).then(function(r) { return r.json(); }).then(function(data) {
-                if (data.valid) {
-                    portHint.textContent = '✓ порт свободен';
-                    portHint.className = 'success';
-                } else {
-                    portHint.textContent = '✗ ' + data.error;
-                    portHint.className = 'error';
+    // Port check
+    var port = document.getElementById('port-input');
+    var hint = document.getElementById('port-hint');
+    var excludeTag = {% if is_edit %}{{ inbound.tag|tojson }}{% else %}null{% endif %};
+    var t;
+    if (port){
+        port.addEventListener('input', function(){
+            clearTimeout(t);
+            var v = port.value;
+            t = setTimeout(function(){
+                if (!v || v < 1 || v > 65535){
+                    hint.textContent = 'порт должен быть в диапазоне 1-65535';
+                    hint.className = 'hint error';
+                    return;
                 }
+                var url = '/api/check-port?port=' + encodeURIComponent(v);
+                if (excludeTag) url += '&exclude_tag=' + encodeURIComponent(excludeTag);
+                fetch(url).then(function(r){ return r.json(); }).then(function(d){
+                    if (d.valid){
+                        hint.textContent = '✓ порт свободен';
+                        hint.className = 'hint success';
+                    } else {
+                        hint.textContent = '✗ ' + d.error;
+                        hint.className = 'hint error';
+                    }
+                });
+            }, 350);
+        });
+    }
+
+    // Private key toggle
+    var togglePriv = document.getElementById('toggle-priv');
+    var privEl = document.getElementById('priv-key');
+    if (togglePriv && privEl){
+        togglePriv.addEventListener('click', function(){
+            if (privEl.dataset.shown === '1'){
+                privEl.textContent = '●●●●●●●●●●●●●●●●●●●●●●●●●●●●●●';
+                privEl.dataset.shown = '0';
+            } else {
+                privEl.textContent = privEl.dataset.real;
+                privEl.dataset.shown = '1';
+            }
+        });
+    }
+
+    // Copy buttons
+    document.querySelectorAll('.copy-btn').forEach(function(b){
+        b.addEventListener('click', function(){
+            var id = b.dataset.target;
+            var el = document.getElementById(id);
+            if (!el) return;
+            var text = el.dataset.real || el.textContent;
+            navigator.clipboard.writeText(text).then(function(){
+                var prev = b.innerHTML;
+                b.textContent = '✓';
+                setTimeout(function(){ b.innerHTML = prev; }, 1200);
             });
-        }, 400);
+        });
     });
 })();
 </script>

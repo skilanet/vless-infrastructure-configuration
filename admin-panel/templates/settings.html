@@ -1,60 +1,222 @@
 {% extends "base.html" %}
-{% block title %}Settings — xray-admin{% endblock %}
+{% block title %}Настройки — xray-admin{% endblock %}
 
 {% block content %}
-<header class="page-header">
-    <h1>Settings</h1>
-</header>
+<div class="stack">
+    <div>
+        <h1 class="page-title">Настройки</h1>
+        <div class="page-sub">базовая инфраструктура xray и параметры панели</div>
+    </div>
 
-<section class="settings-block">
-    <h2>Базовая инфраструктура</h2>
-    <p class="muted">
-        4 служебных файла в <code>{{ '/usr/local/etc/xray/conf.d/' }}</code>:
-        log, api, metrics, stats, policy, DoH-DNS, рутинг с блокировкой
-        RU/BY и рекламы, freedom/blackhole outbounds, локальные api/metrics
-        инбаунды на 127.0.0.1. Без них панель не видит трафик юзеров,
-        блокировки не работают, DNS идёт через системный.
-    </p>
+    <div class="seg">
+        <a class="seg-i {% if tab == 'infra' %}active{% endif %}" href="{{ url_for('settings', tab='infra') }}">Базовая инфраструктура</a>
+        <a class="seg-i {% if tab == 'thresholds' %}active{% endif %}" href="{{ url_for('settings', tab='thresholds') }}">Alert thresholds</a>
+        <a class="seg-i {% if tab == 'notify' %}active{% endif %}" href="{{ url_for('settings', tab='notify') }}">Notifications</a>
+        <a class="seg-i {% if tab == 'geoip' %}active{% endif %}" href="{{ url_for('settings', tab='geoip') }}">GeoIP</a>
+        <a class="seg-i {% if tab == 'backup' %}active{% endif %}" href="{{ url_for('settings', tab='backup') }}">Backup / Restore</a>
+        <a class="seg-i {% if tab == 'admin' %}active{% endif %}" href="{{ url_for('settings', tab='admin') }}">Panel admin</a>
+    </div>
 
-    <table class="data-table">
-        <thead>
-            <tr>
-                <th>Файл</th>
-                <th>Статус</th>
-                <th>Размер</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for f in files %}
-            <tr>
-                <td><code>{{ f.name }}</code></td>
-                <td>
-                    {% if f.exists %}
-                        <span class="badge badge-ok">существует</span>
-                    {% else %}
-                        <span class="badge badge-warn">отсутствует</span>
-                    {% endif %}
-                </td>
-                <td>{{ f.size }} B</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+    {% if tab == 'infra' %}
+    <div class="card">
+        <div class="card-h">
+            <h3>Служебные файлы</h3>
+            <span class="sub mono">/usr/local/etc/xray/conf.d</span>
+            <div class="right">
+                {% set ok = files | selectattr('exists') | list | length %}
+                <span class="chip {% if ok == files|length %}green{% else %}amber{% endif %}">{{ ok }}/{{ files|length }} в порядке</span>
+            </div>
+        </div>
+        <div style="padding:14px 18px">
+            <div style="font-size:12.5px; color:var(--muted); line-height:1.55; max-width:880px; margin-bottom:14px">
+                <span class="mono">log</span>, <span class="mono">api</span>, <span class="mono">metrics</span>, <span class="mono">stats</span>, <span class="mono">policy</span>, <span class="mono">DoH-DNS</span>, роутинг с блокировкой RU/BY и рекламы, freedom/blackhole outbounds, локальные api/metrics инбаунды на <span class="mono">127.0.0.1</span>. Без них панель не видит трафик юзеров, блокировки не работают, DNS идёт через системный.
+            </div>
+            <table class="table" style="margin:0 -18px">
+                <thead><tr><th>Файл</th><th>Статус</th><th>Размер</th><th>Изменён</th></tr></thead>
+                <tbody>
+                {% for f in files %}
+                <tr>
+                    <td><span class="chip mono">{{ f.name }}</span></td>
+                    <td>
+                        {% if f.exists %}<span class="chip green">{% include "_icons/check.svg" %} существует</span>
+                        {% else %}<span class="chip amber">отсутствует</span>{% endif %}
+                    </td>
+                    <td class="mono">{{ f.size }} B</td>
+                    <td class="mono" style="color:var(--muted)">{{ fmt_humans_ago(f.mtime) if f.mtime else '—' }}</td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            <form method="POST" action="{{ url_for('settings_bootstrap') }}" class="row" style="margin-top:14px; gap:14px"
+                  onsubmit="return confirm('Создать недостающие служебные файлы и перезапустить xray?');">
+                <label class="row" style="gap:8px; font-size:13px; cursor:pointer">
+                    <input type="checkbox" name="overwrite" value="1">
+                    Перезаписать существующие <span class="mono" style="color:var(--muted)">(force overwrite)</span>
+                </label>
+                <button type="submit" class="btn accent right">{% include "_icons/reload.svg" %} Пересоздать базовую инфраструктуру</button>
+            </form>
+        </div>
+    </div>
+    {% endif %}
 
-    <form method="POST" action="{{ url_for('settings_bootstrap') }}"
-          onsubmit="return confirm('Создать недостающие служебные файлы и перезапустить xray?');"
-          style="margin-top: 1.5em;">
-        <label class="checkbox-row">
-            <input type="checkbox" name="overwrite" value="1">
-            Перезаписать существующие (force overwrite)
-        </label>
-        <button type="submit" class="btn-primary">Создать базовую инфраструктуру</button>
+    {% if tab == 'thresholds' %}
+    <form method="POST" action="{{ url_for('settings_thresholds') }}">
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:18px">
+        {% for key, defn in threshold_defs.items() %}
+        {% set cur = thresholds.get(key, defn) %}
+        <div class="card pad" style="background:var(--surface-2)">
+            <div style="font-size:13px; font-weight:600; margin-bottom:10px">{{ defn.label }}</div>
+            <div class="row" style="gap:10px">
+                <div class="field" style="flex:1">
+                    <label style="font-size:11px; color:var(--warn)">Warning at</label>
+                    <div class="input-row">
+                        <input class="input mono" name="{{ key }}_warn" type="number" step="any" value="{{ cur.warn }}">
+                        {% if defn.unit %}<span class="chip">{{ defn.unit }}</span>{% endif %}
+                    </div>
+                </div>
+                <div class="field" style="flex:1">
+                    <label style="font-size:11px; color:var(--danger)">Critical at</label>
+                    <div class="input-row">
+                        <input class="input mono" name="{{ key }}_crit" type="number" step="any" value="{{ cur.crit }}">
+                        {% if defn.unit %}<span class="chip">{{ defn.unit }}</span>{% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    <div class="row" style="margin-top:18px">
+        <button type="submit" class="btn accent right">Сохранить пороги</button>
+    </div>
     </form>
+    {% endif %}
 
-    <p class="muted" style="margin-top: 1em;">
-        Порты служебных инбаундов фиксированы: api={{ api_port }}, metrics={{ metrics_port }},
-        socks={{ socks_port }} (все на 127.0.0.1). Если нужно поменять — правь JSON
-        напрямую через <code>sudoedit</code>.
-    </p>
-</section>
+    {% if tab == 'notify' %}
+    <div class="grid-2">
+        <form method="POST" action="{{ url_for('settings_notify') }}" class="card pad">
+            <div class="row" style="margin-bottom:14px; gap:10px">
+                <h3 style="margin:0; font-size:14px">Telegram bot</h3>
+                <div class="right">
+                    <label class="row" style="gap:8px; cursor:pointer">
+                        <input type="checkbox" name="telegram_enabled" value="1" {% if notify.telegram_enabled %}checked{% endif %}>
+                        <span style="font-size:12px; color:var(--muted)">enabled</span>
+                    </label>
+                </div>
+            </div>
+            <div class="stack" style="gap:12px">
+                <div class="field"><label>Bot token</label>
+                    <input class="input mono" type="password" name="telegram_token" value="{{ notify.telegram_token or '' }}" placeholder="123456:ABC…">
+                </div>
+                <div class="field"><label>Chat ID</label>
+                    <input class="input mono" name="telegram_chat_id" value="{{ notify.telegram_chat_id or '' }}" placeholder="-1001234567890">
+                </div>
+                <div class="row" style="gap:8px">
+                    <button type="submit" class="btn accent">Save</button>
+                </div>
+            </div>
+        </form>
+        <div class="card pad">
+            <h3 style="margin:0 0 14px; font-size:14px">Что отправляем</h3>
+            <form method="POST" action="{{ url_for('settings_notify') }}">
+                <input type="hidden" name="telegram_enabled" value="{{ '1' if notify.telegram_enabled else '0' }}">
+                <input type="hidden" name="telegram_token" value="{{ notify.telegram_token or '' }}">
+                <input type="hidden" name="telegram_chat_id" value="{{ notify.telegram_chat_id or '' }}">
+                <div class="stack" style="gap:10px">
+                    {% set events = [
+                        ('send_xray_stopped', 'xray service stopped'),
+                        ('send_critical', 'Critical alerts (CPU/Memory/etc)'),
+                        ('send_warning', 'Warning alerts'),
+                        ('send_user_added', 'New user added'),
+                        ('send_failed_login', 'Failed login attempts (>3)'),
+                    ] %}
+                    {% for key, label in events %}
+                    <label class="row" style="gap:10px; font-size:13px; cursor:pointer; padding:4px 0">
+                        <input type="checkbox" name="{{ key }}" value="1" {% if notify[key] %}checked{% endif %}>
+                        <span>{{ label }}</span>
+                    </label>
+                    {% endfor %}
+                </div>
+                <button type="submit" class="btn sm accent mt-12">Сохранить события</button>
+            </form>
+            <hr class="sep">
+            <form method="POST" action="{{ url_for('settings_notify_test') }}">
+                <button type="submit" class="btn">Test connection</button>
+                <span class="hint" style="margin-left:8px">отправит «тестовое сообщение ✅» в указанный chat</span>
+            </form>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if tab == 'geoip' %}
+    <div class="card pad" style="max-width:640px">
+        <h3 style="margin:0 0 14px; font-size:14px">GeoIP / Geosite база</h3>
+        <div class="meta-row"><span class="k">geoip.dat</span>
+            <span>{% if geoip.exists %}<span class="chip green">существует</span> <span class="mono">{{ fmt_bytes(geoip.size) }}</span> · {{ fmt_humans_ago(geoip.mtime) }}{% else %}<span class="chip amber">отсутствует</span>{% endif %}</span>
+        </div>
+        <div class="meta-row"><span class="k">geosite.dat</span>
+            <span>{% if geoip.geosite_exists %}<span class="chip green">существует</span> <span class="mono">{{ fmt_bytes(geoip.geosite_size) }}</span>{% else %}<span class="chip amber">отсутствует</span>{% endif %}</span>
+        </div>
+        <hr class="sep">
+        <form method="POST" action="{{ url_for('settings_geoip_update') }}">
+            <button type="submit" class="btn accent">{% include "_icons/reload.svg" %} Update database</button>
+            <span style="font-size:12px; color:var(--muted); margin-left:8px">скачивает Loyalsoldier/v2ray-rules-dat releases</span>
+        </form>
+    </div>
+    {% endif %}
+
+    {% if tab == 'backup' %}
+    <div class="grid-2">
+        <div class="card pad">
+            <h3 style="margin:0 0 14px; font-size:14px">Backup</h3>
+            <p style="font-size:13px; color:var(--muted); margin:0 0 14px">
+                Архив <span class="mono">conf.d/</span> + <span class="mono">admin-config.json</span> + <span class="mono">alerts.json</span>
+            </p>
+            <form method="POST" action="{{ url_for('settings_backup_create') }}" style="display:inline">
+                <button type="submit" class="btn accent">Создать backup</button>
+            </form>
+            {% if backups %}
+            <h4 style="margin:18px 0 8px; font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.08em">Последние</h4>
+            <table class="table compact" style="margin:0 -18px">
+                <tbody>
+                {% for b in backups %}
+                <tr>
+                    <td><span class="chip mono">{{ b.name }}</span></td>
+                    <td class="mono">{{ fmt_bytes(b.size) }}</td>
+                    <td class="mono" style="color:var(--muted)">{{ fmt_humans_ago(b.mtime) }}</td>
+                    <td class="actions-cell"><a class="btn sm" href="{{ url_for('settings_backup_download', name=b.name) }}">{% include "_icons/download.svg" %}</a></td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            {% endif %}
+        </div>
+        <div class="card pad">
+            <h3 style="margin:0 0 14px; font-size:14px">Restore</h3>
+            <form method="POST" action="{{ url_for('settings_backup_restore') }}" enctype="multipart/form-data"
+                  onsubmit="return confirm('Восстановление перезапишет текущий conf.d/. Pre-restore snapshot будет создан автоматически. Продолжить?');">
+                <div class="field"><label>Файл backup (.tar.gz)</label><input class="input" type="file" name="file" accept=".tar.gz,.tgz" required></div>
+                <div class="banner warn mt-12">
+                    {% include "_icons/alert.svg" %}
+                    <span>Восстановление затрёт текущую конфигурацию xray. Перед операцией создаётся pre-restore snapshot.</span>
+                </div>
+                <button type="submit" class="btn accent mt-12">Restore</button>
+            </form>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if tab == 'admin' %}
+    <div class="card pad" style="max-width:560px">
+        <h3 style="margin:0 0 14px; font-size:14px">Сменить пароль панели</h3>
+        <form method="POST" action="{{ url_for('settings_password') }}">
+            <div class="stack" style="gap:12px">
+                <div class="field"><label>Текущий пароль</label><input type="password" class="input" name="current" required></div>
+                <div class="field"><label>Новый пароль (мин. 8 символов)</label><input type="password" class="input" name="new" minlength="8" required></div>
+                <div class="field"><label>Подтвердите</label><input type="password" class="input" name="confirm" required></div>
+                <button type="submit" class="btn accent" style="align-self:flex-start">Сменить пароль</button>
+            </div>
+        </form>
+    </div>
+    {% endif %}
+</div>
 {% endblock %}

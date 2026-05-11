@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+{% block title %}{{ user.email }} — xray-admin{% endblock %}
+
+{% block content %}
+<div class="stack">
+    <div class="row">
+        <a class="btn ghost" href="{{ url_for('users_list') }}">{% include "_icons/back.svg" %} Пользователи</a>
+        <div class="right row" style="gap:8px">
+            <a class="btn" href="{{ url_for('users_edit', uid=user.id) }}">{% include "_icons/edit.svg" %} Edit</a>
+            <form method="POST" action="{{ url_for('users_delete', uid=user.id) }}" style="display:inline"
+                  onsubmit="return confirm('Удалить юзера «{{ user.email }}»?');">
+                <button type="submit" class="btn danger">{% include "_icons/trash.svg" %} Удалить</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="row" style="gap:14px">
+        <div class="avatar" style="width:48px; height:48px; font-size:18px">{{ user.email[:1] | upper }}</div>
+        <div>
+            <h1 class="page-title">{{ user.email }}</h1>
+            <div class="row" style="gap:8px; margin-top:6px">
+                <span class="mono" style="font-size:12px; color:var(--muted)">{{ user.id }}</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="grid-main">
+        <div class="stack">
+            <div class="card pad">
+                <div class="meta-row"><span class="k">UUID</span><span class="mono">{{ user.id }}</span></div>
+                <div class="meta-row"><span class="k">Inbounds</span>
+                    <span class="row" style="gap:6px; flex-wrap:wrap">
+                        {% for i in user.inbounds %}<span class="chip mono">{{ i }}</span>{% endfor %}
+                    </span>
+                </div>
+                <div class="meta-row"><span class="k">Level</span><span>{{ user.level }}</span></div>
+            </div>
+
+            <div class="grid-2">
+                <div class="card pad">
+                    <div class="label" style="font-size:11px; text-transform:uppercase; letter-spacing:.1em; color:var(--muted)">↑ Upload</div>
+                    <div style="font-size:24px; font-weight:700; margin-top:8px">{{ fmt_bytes(user.uplink) }}</div>
+                </div>
+                <div class="card pad">
+                    <div class="label" style="font-size:11px; text-transform:uppercase; letter-spacing:.1em; color:var(--muted)">↓ Download</div>
+                    <div style="font-size:24px; font-weight:700; margin-top:8px">{{ fmt_bytes(user.downlink) }}</div>
+                </div>
+            </div>
+
+            {% if recent %}
+            <div class="card">
+                <div class="card-h">
+                    <h3>Последние подключения</h3>
+                    <span class="sub">{{ recent|length }} за период</span>
+                    <div class="right"><a class="btn sm ghost" href="{{ url_for('connections_list', user=user.email) }}">Все Connections →</a></div>
+                </div>
+                <table class="table compact">
+                    <thead><tr><th>Время</th><th>IP</th><th>Inbound</th><th>Destination</th></tr></thead>
+                    <tbody>
+                    {% for c in recent %}
+                    <tr>
+                        <td class="mono" style="font-size:12px">{{ c.ts }}</td>
+                        <td><span class="mono">{{ c.src }}</span></td>
+                        <td>{% if c.inbound %}<span class="chip mono">{{ c.inbound }}</span>{% else %}<span class="em-dash">—</span>{% endif %}</td>
+                        <td><span class="mono" style="font-size:12px">{{ c.dst or '—' }}</span></td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% endif %}
+
+            {% if items %}
+            <div class="card">
+                <div class="card-h"><h3>Все ссылки</h3><span class="sub">{{ items|length }} inbound'ов</span></div>
+                <div style="padding: 14px 18px">
+                    <textarea readonly class="textarea mono" id="all-links" rows="{{ items|length + 1 }}" style="font-size:11px; line-height:1.5">{% for item in items %}{{ item.link }}
+{% endfor %}</textarea>
+                    <button class="btn sm accent mt-8" data-copy-id="all-links">{% include "_icons/copy.svg" %} Скопировать все</button>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <div class="stack" style="position:sticky; top:24px">
+            {% if items %}
+                {% for item in items %}
+                <div class="qr-card">
+                    <div class="row" style="justify-content:space-between">
+                        <h3 style="margin:0; font-size:14px" class="mono">{{ item.tag }}</h3>
+                        <div class="row" style="gap:6px">
+                            <span class="chip accent">reality</span>
+                            <span class="chip">:{{ item.port }}</span>
+                        </div>
+                    </div>
+                    <div class="row" style="gap:6px; flex-wrap:wrap; font-size:11px; color:var(--muted)">
+                        <span class="mono">SNI: {{ item.sni }}</span>
+                        <span class="mono">· {{ item.network }}</span>
+                    </div>
+                    <div class="qr-frame">{{ item.qr_svg | safe }}</div>
+                    <textarea readonly class="textarea mono" id="link-{{ loop.index }}" rows="3"
+                              style="font-size:10.5px; line-height:1.5">{{ item.link }}</textarea>
+                    <div class="row" style="gap:6px; flex-wrap:wrap">
+                        <button class="btn accent sm" data-copy-id="link-{{ loop.index }}">{% include "_icons/copy.svg" %} Скопировать</button>
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <div class="card pad">
+                    <div class="empty" style="padding: 24px 0">
+                        <div class="empty-ic">{% include "_icons/qr.svg" %}</div>
+                        <div class="empty-title">Нет ссылок</div>
+                        <div class="empty-sub">юзер не привязан ни к одному VLESS-инбаунду</div>
+                        <a class="btn accent" href="{{ url_for('users_edit', uid=user.id) }}">Привязать</a>
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.querySelectorAll('[data-copy-id]').forEach(function(btn){
+    btn.addEventListener('click', function(){
+        var el = document.getElementById(btn.dataset.copyId);
+        if (!el) return;
+        navigator.clipboard.writeText(el.value).then(function(){
+            var prev = btn.innerHTML;
+            btn.textContent = '✓ Скопировано';
+            setTimeout(function(){ btn.innerHTML = prev; }, 1200);
+        });
+    });
+});
+</script>
+{% endblock %}

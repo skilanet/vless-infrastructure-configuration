@@ -1,113 +1,131 @@
 {% extends "base.html" %}
-{% block title %}{% if mode == 'edit' %}Edit{% else %}New{% endif %} user — xray-admin{% endblock %}
+{% set is_edit = mode == 'edit' %}
+{% block title %}{% if is_edit %}Edit{% else %}New{% endif %} user — xray-admin{% endblock %}
 
 {% block content %}
-<h1>
-    {% if mode == 'edit' %}Edit user «{{ user.email }}»{% else %}Создать юзера{% endif %}
-</h1>
-
-<form method="POST" class="form-stack" id="user-form">
-    <label>
-        Email <span class="required">*</span>
-        <input type="text" name="email" required maxlength="64"
-               pattern="[a-zA-Z0-9_\-\.]+(@[a-zA-Z0-9_\-\.]+)?"
-               value="{{ user.email if user else '' }}"
-               placeholder="например: vera или vera@server">
-        <small>если без @ — автоматически добавится @server</small>
-    </label>
-
-    <label>
-        UUID <span class="required">*</span>
-        <div class="input-with-button">
-            <input type="text" name="uuid" id="uuid-input" required
-                   pattern="[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
-                   value="{{ user.id if user else '' }}"
-                   placeholder="нажми «Сгенерировать»">
-            <button type="button" id="gen-uuid" class="btn-secondary">🎲 Сгенерировать</button>
+<div class="stack">
+    <div class="row">
+        <a class="btn ghost" href="{{ url_for('users_detail', uid=user.id) if is_edit else url_for('users_list') }}">
+            {% include "_icons/back.svg" %} {{ 'Назад' if is_edit else 'Пользователи' }}
+        </a>
+        <div class="right row" style="gap:8px">
+            <a class="btn" href="{{ url_for('users_list') }}">Отмена</a>
+            <button type="submit" form="user-form" class="btn accent">{{ 'Сохранить' if is_edit else 'Создать юзера' }}</button>
         </div>
-        {% if mode == 'edit' %}
-        <small class="warning">⚠ изменение UUID отключит существующих клиентов — потребуется обновление подписок</small>
-        {% else %}
-        <small>уникальный идентификатор юзера</small>
-        {% endif %}
-    </label>
-
-    <label>
-        Inbounds <span class="required">*</span>
-        <div class="chip-selector" id="chip-selector">
-            {% if available_inbounds %}
-                {% for tag in available_inbounds %}
-                <label class="chip {% if tag in selected_inbounds %}chip-selected{% endif %}">
-                    <input type="checkbox" name="inbounds" value="{{ tag }}"
-                           {% if tag in selected_inbounds %}checked{% endif %}>
-                    <span class="chip-check">✓</span>
-                    <span class="chip-label">{{ tag }}</span>
-                </label>
-                {% endfor %}
-            {% else %}
-                <p class="muted">нет доступных inbound'ов. Сначала <a href="{{ url_for('inbounds_new') }}">создай inbound</a>.</p>
-            {% endif %}
-        </div>
-        <small>юзер должен быть выбран хотя бы в одном inbound'е</small>
-    </label>
-
-    <div class="form-actions">
-        <button type="submit" class="btn-primary" {% if not available_inbounds %}disabled{% endif %}>
-            {% if mode == 'edit' %}Сохранить{% else %}Создать{% endif %}
-        </button>
-        <a href="{{ url_for('users_list') }}" class="btn-cancel">Отмена</a>
     </div>
-</form>
+    <div>
+        <h1 class="page-title">
+            {% if is_edit %}Редактирование <span style="color:var(--muted)">{{ user.email }}</span>
+            {% else %}Новый юзер
+            {% endif %}
+        </h1>
+        <div class="page-sub">создаётся в выбранных inbound'ах с одним UUID</div>
+    </div>
+
+    <form method="POST" id="user-form" class="card pad" style="max-width: 760px">
+        <div class="stack" style="gap:18px">
+            <div class="field">
+                <label>Email / имя <span class="req">*</span></label>
+                <input class="input" type="text" name="email" required maxlength="64"
+                       pattern="[a-zA-Z0-9_\-\.]+(@[a-zA-Z0-9_\-\.]+)?"
+                       value="{{ user.email if user else '' }}"
+                       placeholder="например: vera или vera@server">
+                <div class="hint">если без @ — автоматически добавится <span class="mono">@server</span></div>
+            </div>
+
+            <div class="field">
+                <label>UUID <span class="req">*</span></label>
+                <div class="input-row">
+                    <input class="input mono" type="text" name="uuid" id="uuid-input" required
+                           pattern="[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+                           value="{{ user.id if user else '' }}"
+                           placeholder="нажми «Сгенерировать»">
+                    <button type="button" id="gen-uuid" class="btn">{% include "_icons/dice.svg" %} Сгенерировать</button>
+                </div>
+                {% if is_edit %}
+                <div class="banner warn" style="margin-top:8px; display:none" id="uuid-warn">
+                    {% include "_icons/alert.svg" %}
+                    <span>Смена UUID отключит существующих клиентов. Подписки придётся обновить.</span>
+                </div>
+                {% endif %}
+            </div>
+
+            <div class="field">
+                <label>Inbounds <span class="req">*</span></label>
+                {% if available_inbounds %}
+                <div class="toggle-pills" id="inbound-picker">
+                    {% for ib in available_inbounds %}
+                    {% set tag = ib.tag %}
+                    {% set ss = ib.streamSettings or {} %}
+                    {% set rs = ss.realitySettings or {} %}
+                    {% set sns = rs.serverNames or [] %}
+                    <label class="pill pill-block {% if tag in selected_inbounds %}on{% endif %}">
+                        <input type="checkbox" name="inbounds" value="{{ tag }}" {% if tag in selected_inbounds %}checked{% endif %} hidden>
+                        <div class="row" style="gap:6px"><span class="x">✓</span><b class="mono">{{ tag }}</b></div>
+                        <div class="sub">{{ ib.protocol }} · {{ ss.network or '—' }} · :{{ ib.port }}</div>
+                    </label>
+                    {% endfor %}
+                </div>
+                <div class="hint">юзер должен быть выбран хотя бы в одном inbound'е</div>
+                {% else %}
+                <div class="banner warn">
+                    {% include "_icons/alert.svg" %}
+                    <span>Нет доступных VLESS-инбаундов. Сначала <a href="{{ url_for('inbounds_new') }}" style="color:inherit; text-decoration:underline">создай inbound</a>.</span>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </form>
+</div>
 {% endblock %}
 
 {% block scripts %}
 <script>
 (function() {
-    // Кнопка генерации UUID
-    var genBtn = document.getElementById('gen-uuid');
-    var uuidInput = document.getElementById('uuid-input');
-    if (genBtn) {
-        genBtn.addEventListener('click', function() {
-            var mode = '{{ mode }}';
-            // Если есть существующий UUID и режим edit — спрашиваем подтверждение
-            if (mode === 'edit' && uuidInput.value && uuidInput.value.length > 0) {
-                if (!confirm('Регенерация UUID отключит существующих клиентов. Продолжить?')) {
-                    return;
-                }
+    var gen = document.getElementById('gen-uuid');
+    var inp = document.getElementById('uuid-input');
+    var warn = document.getElementById('uuid-warn');
+    var orig = inp ? inp.value : '';
+
+    if (gen && inp){
+        gen.addEventListener('click', function(){
+            var isEdit = {{ 'true' if is_edit else 'false' }};
+            if (isEdit && inp.value && inp.value.length > 0){
+                if (!confirm('Регенерация UUID отключит существующих клиентов. Продолжить?')) return;
             }
-            fetch('/api/generate-uuid')
-                .then(function(r) { return r.json(); })
-                .then(function(data) {
-                    uuidInput.value = data.uuid;
-                });
+            fetch('/api/generate-uuid').then(function(r){ return r.json(); }).then(function(d){
+                inp.value = d.uuid;
+                if (warn && inp.value !== orig) warn.style.display = '';
+            });
+        });
+        inp.addEventListener('input', function(){
+            if (warn && inp.value !== orig) warn.style.display = '';
+            else if (warn) warn.style.display = 'none';
         });
     }
 
-    // Chip selector — toggle класса на label
-    var chipSelector = document.getElementById('chip-selector');
-    if (chipSelector) {
-        chipSelector.addEventListener('change', function(e) {
-            var checkbox = e.target;
-            if (checkbox.type === 'checkbox') {
-                var label = checkbox.closest('.chip');
-                if (checkbox.checked) {
-                    label.classList.add('chip-selected');
-                } else {
-                    label.classList.remove('chip-selected');
-                }
-            }
+    // Inbound toggle-pills
+    var picker = document.getElementById('inbound-picker');
+    if (picker){
+        picker.querySelectorAll('.pill').forEach(function(p){
+            p.addEventListener('click', function(e){
+                if (e.target.tagName === 'INPUT') return;
+                var cb = p.querySelector('input[type=checkbox]');
+                if (!cb) return;
+                cb.checked = !cb.checked;
+                p.classList.toggle('on', cb.checked);
+            });
         });
     }
 
-    // Перед отправкой — клиентская валидация: минимум 1 inbound
+    // Validate at least one selected on submit
     var form = document.getElementById('user-form');
-    if (form) {
-        form.addEventListener('submit', function(e) {
+    if (form){
+        form.addEventListener('submit', function(e){
             var checked = form.querySelectorAll('input[name="inbounds"]:checked');
-            if (checked.length === 0) {
+            if (checked.length === 0){
                 e.preventDefault();
                 alert('Выбери хотя бы один inbound');
-                return false;
             }
         });
     }

@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% set is_edit = mode == 'edit' %}
+{% block title %}{% if is_edit %}Edit{% else %}New{% endif %} routing rule — xray-admin{% endblock %}
+
+{% block content %}
+<div class="stack">
+    <div class="row">
+        <a class="btn ghost" href="{{ url_for('routing_list') }}">{% include "_icons/back.svg" %} Routing</a>
+        <div class="right row" style="gap:8px">
+            <a class="btn" href="{{ url_for('routing_list') }}">Отмена</a>
+            <button type="submit" form="routing-form" class="btn accent">{{ 'Сохранить' if is_edit else 'Создать правило' }}</button>
+        </div>
+    </div>
+    <div>
+        <h1 class="page-title">{{ 'Редактирование правила' if is_edit else 'Новое правило маршрутизации' }}</h1>
+        <div class="page-sub">{% if is_edit %}правило #{{ idx + 1 }}{% else %}добавится в конец списка{% endif %}</div>
+    </div>
+
+    <form method="POST" id="routing-form">
+    <div class="grid-main">
+        <div class="card pad">
+            <h3 style="margin:0 0 12px; font-size:14px">Match conditions
+                <span style="color:var(--muted); font-size:12px; font-weight:500">· хотя бы одно</span>
+            </h3>
+
+            <div class="stack" style="gap:18px">
+                <div class="field">
+                    <label>Domain (по одному в строке)</label>
+                    <textarea class="textarea mono" name="domains" placeholder="domain:vk.com&#10;geosite:category-ads-all&#10;regexp:.*\.ru$" rows="4">{{ rule.domains if rule else '' }}</textarea>
+                    <div class="hint">форматы: <span class="mono">domain:example.com</span>, <span class="mono">geosite:name</span>, <span class="mono">regexp:.*\.ru$</span>, <span class="mono">example.com</span></div>
+                </div>
+
+                <div class="field">
+                    <label>IP (по одному в строке)</label>
+                    <textarea class="textarea mono" name="ips" placeholder="geoip:ru&#10;192.168.0.0/16&#10;1.2.3.4" rows="4">{{ rule.ips if rule else '' }}</textarea>
+                    <div class="hint">форматы: <span class="mono">geoip:ru</span>, <span class="mono">192.168.0.0/16</span>, <span class="mono">1.2.3.4</span></div>
+                </div>
+
+                <div class="form-grid">
+                    <div class="field">
+                        <label>Port</label>
+                        <input class="input mono" type="text" name="ports" value="{{ rule.ports if rule else '' }}" placeholder="443 или 80,443 или 1000-2000">
+                    </div>
+                    <div class="field">
+                        <label>Source inbound</label>
+                        <select class="select" name="source_inbound">
+                            <option value="">Any</option>
+                            {% for i in inbounds %}
+                            <option value="{{ i }}" {% if rule and rule.source_inbound == i %}selected{% endif %}>{{ i }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <div class="field">
+                    <label>Protocol</label>
+                    <div class="toggle-pills">
+                        {% set protos = rule.protocols if rule else [] %}
+                        {% for p in ['http', 'tls', 'quic', 'bittorrent'] %}
+                        <label class="pill {% if p in protos %}on{% endif %}">
+                            <input type="checkbox" name="protocols" value="{{ p }}" {% if p in protos %}checked{% endif %} hidden>
+                            <span class="x" {% if p not in protos %}style="display:none"{% endif %}>✓</span>{{ p }}
+                        </label>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card pad">
+            <h3 style="margin:0 0 12px; font-size:14px">Action</h3>
+            <div class="field">
+                <label>Outbound <span class="req">*</span></label>
+                <select class="select" name="outbound" required>
+                    {% for o in outbounds %}
+                    <option value="{{ o }}" {% if rule and rule.outbound == o %}selected{% endif %}>{{ o }}</option>
+                    {% endfor %}
+                </select>
+                <div class="hint">направление, куда уйдёт трафик, если правило сматчилось</div>
+            </div>
+            <hr class="sep">
+            <div class="field">
+                <label>Enabled</label>
+                <div class="row" style="gap:10px; margin-top:6px">
+                    <label class="row" style="gap:8px; cursor:pointer">
+                        <input type="checkbox" name="enabled" value="1" {% if not rule or rule.enabled %}checked{% endif %}>
+                        <span style="font-size:13px">правило активно</span>
+                    </label>
+                </div>
+            </div>
+        </div>
+    </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.querySelectorAll('.toggle-pills .pill').forEach(function(p){
+    var cb = p.querySelector('input[type=checkbox]');
+    if (!cb) return;
+    p.addEventListener('click', function(e){
+        if (e.target.tagName === 'INPUT') return;
+        cb.checked = !cb.checked;
+        p.classList.toggle('on', cb.checked);
+        var x = p.querySelector('.x'); if (x) x.style.display = cb.checked ? '' : 'none';
+    });
+});
+</script>
+{% endblock %}

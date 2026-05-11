@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+{% block title %}Logs — xray-admin{% endblock %}
+
+{% block content %}
+<div class="stack">
+    <div class="row">
+        <div>
+            <h1 class="page-title">Logs</h1>
+            <div class="page-sub mono">{{ access_path if kind == 'access' else error_path }}</div>
+        </div>
+        <div class="right row" style="gap:8px">
+            <div class="tabs">
+                <a class="tab {% if kind == 'access' %}active{% endif %}" href="{{ url_for('logs_view', kind='access') }}">access.log</a>
+                <a class="tab {% if kind == 'error' %}active{% endif %}" href="{{ url_for('logs_view', kind='error') }}">error.log</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="filters">
+        <div class="search" style="min-width:280px; box-shadow:none; border:1px solid var(--border-strong)">
+            {% include "_icons/search.svg" %}
+            <input type="text" id="filter-q" placeholder="фильтр по строкам…">
+        </div>
+        <button type="button" id="toggle-auto" class="btn sm accent">⏸ Pause auto-refresh</button>
+        <span class="row" style="gap:6px; font-size:12px; color:var(--muted); margin-left:6px" id="auto-state">
+            <span class="dot green pulse"></span> обновляется каждые 5с
+        </span>
+        <div class="right row" style="gap:6px">
+            <a class="btn sm" href="{{ url_for('logs_view', kind=kind, download=1) }}">{% include "_icons/download.svg" %} Скачать</a>
+            <button type="button" class="btn sm" id="clear-view">Clear view</button>
+        </div>
+    </div>
+
+    <div class="card" id="log-card" style="padding:6px 0; max-height: 600px; overflow:auto">
+        <div id="log-body">
+            <div class="empty" style="padding: 40px 24px">
+                <div class="empty-sub">загружаем…</div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function(){
+    var kind = {{ kind|tojson }};
+    var body = document.getElementById('log-body');
+    var card = document.getElementById('log-card');
+    var input = document.getElementById('filter-q');
+    var autoBtn = document.getElementById('toggle-auto');
+    var autoState = document.getElementById('auto-state');
+    var clearBtn = document.getElementById('clear-view');
+    var auto = true;
+    var timer;
+    var allLines = [];
+
+    function escape(s){
+        return (s == null ? '' : String(s)).replace(/[&<>"']/g, function(c){
+            return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+        });
+    }
+
+    function renderAccess(lines){
+        var q = (input.value || '').toLowerCase();
+        var html = '';
+        var matched = 0;
+        lines.forEach(function(l){
+            var raw = (l.raw || '').toLowerCase();
+            if (q && raw.indexOf(q) === -1) return;
+            matched++;
+            html += '<div class="log-line">'
+                + '<span class="time">' + escape(l.ts) + '</span>'
+                + '<span class="kind ' + escape(l.kind) + '">' + escape(l.kind) + '</span>'
+                + '<span class="body">'
+                + (l.src ? '<span style="color:var(--ink)">' + escape(l.src) + '</span>' : '')
+                + (l.dst ? '<span style="color:var(--muted-2)"> → </span><span style="color:var(--ink)">' + escape(l.dst) + '</span>' : '')
+                + (l.user ? ' <span style="color:var(--muted)">(' + escape(l.user)
+                          + (l.inbound ? ', ' + escape(l.inbound) : '')
+                          + (l.outbound ? ' → ' + escape(l.outbound) : '')
+                          + ')</span>' : '')
+                + '</span>'
+                + '</div>';
+        });
+        if (matched === 0){
+            html = '<div class="empty" style="padding: 40px 24px"><div class="empty-sub">Ничего не нашли</div></div>';
+        }
+        body.innerHTML = html;
+    }
+
+    function renderError(lines){
+        var q = (input.value || '').toLowerCase();
+        var html = '';
+        var matched = 0;
+        lines.forEach(function(l){
+            var raw = (l.raw || '').toLowerCase();
+            if (q && raw.indexOf(q) === -1) return;
+            matched++;
+            html += '<div class="log-line">'
+                + '<span class="time">' + escape(l.ts) + '</span>'
+                + '<span class="kind ' + escape(l.level) + '">' + escape(l.level) + '</span>'
+                + '<span class="body">' + escape(l.body) + '</span>'
+                + '</div>';
+        });
+        if (matched === 0){
+            html = '<div class="empty" style="padding: 40px 24px"><div class="empty-sub">Ничего не нашли</div></div>';
+        }
+        body.innerHTML = html;
+    }
+
+    function load(){
+        fetch('/api/logs/' + kind + '?n=300').then(function(r){ return r.json(); }).then(function(d){
+            if (d.error){
+                body.innerHTML = '<div class="empty"><div class="empty-sub">' + escape(d.error) + '</div></div>';
+                return;
+            }
+            allLines = d.lines || [];
+            if (!d.exists){
+                body.innerHTML = '<div class="empty"><div class="empty-ic">⚠</div><div class="empty-title">Файл не найден</div><div class="empty-sub">' + (kind === 'access' ? {{ access_path|tojson }} : {{ error_path|tojson }}) + '</div></div>';
+                return;
+            }
+            if (kind === 'access') renderAccess(allLines); else renderError(allLines);
+        }).catch(function(e){
+            body.innerHTML = '<div class="empty"><div class="empty-sub">' + escape(e.message) + '</div></div>';
+        });
+    }
+
+    function startAuto(){
+        clearInterval(timer);
+        timer = setInterval(load, 5000);
+        autoBtn.textContent = '⏸ Pause auto-refresh';
+        autoBtn.classList.add('accent');
+        autoState.innerHTML = '<span class="dot green pulse"></span> обновляется каждые 5с';
+        auto = true;
+    }
+    function stopAuto(){
+        clearInterval(timer);
+        autoBtn.textContent = '▶ Resume auto-refresh';
+        autoBtn.classList.remove('accent');
+        autoState.innerHTML = 'остановлено';
+        auto = false;
+    }
+
+    autoBtn.addEventListener('click', function(){
+        if (auto) stopAuto(); else { startAuto(); load(); }
+    });
+    clearBtn.addEventListener('click', function(){
+        body.innerHTML = '';
+    });
+    input.addEventListener('input', function(){
+        if (kind === 'access') renderAccess(allLines); else renderError(allLines);
+    });
+
+    load();
+    startAuto();
+})();
+</script>
+{% endblock %}

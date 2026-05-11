@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}Alerts — xray-admin{% endblock %}
+
+{% block content %}
+<div class="stack">
+    <div class="row">
+        <div>
+            <h1 class="page-title">Alerts</h1>
+            <div class="page-sub">Активные инциденты и история</div>
+        </div>
+        <div class="right">
+            <a class="btn" href="{{ url_for('settings', tab='thresholds') }}">{% include "_icons/settings.svg" %} Настройки порогов</a>
+        </div>
+    </div>
+
+    <div>
+        <div class="row" style="padding:0 4px 8px">
+            <div style="font-size:11px; text-transform:uppercase; letter-spacing:.12em; color:var(--muted)">Active</div>
+            <span class="right chip">{{ active|length }}</span>
+        </div>
+
+        {% if active %}
+        <div class="stack">
+            {% for a in active %}
+            <div class="card pad na-card {{ a.severity }}" style="align-items:flex-start">
+                <span class="sev-mark {% if a.severity == 'critical' %}red{% elif a.severity == 'warning' %}amber{% else %}green{% endif %}">
+                    {% include "_icons/alert.svg" %}
+                </span>
+                <div style="min-width:0; flex:1">
+                    <div class="row" style="gap:8px; margin-bottom:4px">
+                        <span class="chip {% if a.severity == 'critical' %}red{% else %}amber{% endif %}" style="text-transform:uppercase; letter-spacing:.08em">{{ a.severity }}</span>
+                        <span class="na-when">{{ fmt_humans_ago(a.first_seen) }}</span>
+                    </div>
+                    <div class="na-title" style="font-size:14.5px">{{ a.title }}</div>
+                    <div class="na-sub" style="margin-top:4px">{{ a.sub }}</div>
+                    <div class="row" style="gap:6px; margin-top:12px">
+                        <form method="POST" action="{{ url_for('alerts_ack', alert_id=a.id) }}" style="display:inline">
+                            <button type="submit" class="btn sm">{% include "_icons/check.svg" %} Acknowledge</button>
+                        </form>
+                        <form method="POST" action="{{ url_for('alerts_snooze', alert_id=a.id) }}" style="display:inline">
+                            <button type="submit" class="btn sm">Snooze 1h</button>
+                        </form>
+                        <form method="POST" action="{{ url_for('alerts_dismiss', alert_id=a.id) }}" style="display:inline"
+                              onsubmit="return confirm('Скрыть алёрт «{{ a.title }}»?');">
+                            <button type="submit" class="btn sm danger">Dismiss</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="card">
+            <div class="empty">
+                <div class="empty-ic">{% include "_icons/check.svg" %}</div>
+                <div class="empty-title">🟢 Активных алёртов нет</div>
+                <div class="empty-sub">Всё работает в штатном режиме</div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="card">
+        <div class="card-h">
+            <h3>История алёртов</h3>
+            <span class="sub">{{ history|length }} событий</span>
+        </div>
+        {% if history %}
+        <table class="table compact">
+            <thead><tr><th>Время</th><th>Severity</th><th>Алёрт</th><th>Статус</th><th>Action</th></tr></thead>
+            <tbody>
+            {% for h in history %}
+            <tr>
+                <td class="mono" style="font-size:12px">{{ h.t }}</td>
+                <td><span class="chip {% if h.sev == 'critical' %}red{% else %}amber{% endif %}">{{ h.sev }}</span></td>
+                <td>{{ h.title }}</td>
+                <td>{{ h.status }}</td>
+                <td style="color:var(--muted)">{{ h.by }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="empty"><div class="empty-sub">истории пока нет</div></div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

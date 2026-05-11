@@ -3,38 +3,127 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}xray admin{% endblock %}</title>
+    <title>{% block title %}xray-admin{% endblock %}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-    {% if session.logged_in %}
-    <nav>
-        <div class="nav-brand"><strong>xray-admin</strong></div>
-        <div class="nav-links">
-            <a href="{{ url_for('dashboard') }}" {% if request.endpoint == 'dashboard' %}class="active"{% endif %}>Dashboard</a>
-            <a href="{{ url_for('inbounds_list') }}" {% if request.endpoint and 'inbounds' in request.endpoint %}class="active"{% endif %}>Inbounds</a>
-            <a href="{{ url_for('users_list') }}" {% if request.endpoint and 'users' in request.endpoint %}class="active"{% endif %}>Users</a>
-            <a href="{{ url_for('settings') }}" {% if request.endpoint == 'settings' %}class="active"{% endif %}>Settings</a>
-            <a href="{{ url_for('logout') }}" class="logout">Logout</a>
+{% if not session.logged_in %}
+    {# Login layout — full-screen card #}
+    <div class="login-shell">
+        {% block login_body %}{% endblock %}
+    </div>
+{% else %}
+    {% set ep = request.endpoint or '' %}
+    {% set active = (
+        'overview' if ep == 'dashboard'
+        else 'connections' if 'connections' in ep
+        else 'logs' if 'logs' in ep
+        else 'alerts' if 'alerts' in ep
+        else 'inbounds' if 'inbounds' in ep
+        else 'outbounds' if 'outbounds' in ep
+        else 'routing' if 'routing' in ep
+        else 'users' if 'users' in ep
+        else 'settings' if 'settings' in ep
+        else ''
+    ) %}
+    <div class="app">
+        <div class="shell">
+            <aside class="sb">
+                <div class="brand">
+                    <div class="brand-mark">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M12 3l8 3v6c0 5-3.5 8.5-8 9-4.5-.5-8-4-8-9V6l8-3z"/>
+                            <path d="M9 12l2 2 4-4"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <div class="brand-name">xray-admin</div>
+                        <div class="brand-sub mono">{{ server_hostname or 'xray' }}</div>
+                    </div>
+                </div>
+
+                <div class="nav-label">Мониторинг</div>
+                <a class="nav-item {% if active == 'overview' %}active{% endif %}" href="{{ url_for('dashboard') }}">
+                    {% include "_icons/dashboard.svg" ignore missing %}
+                    <span>Обзор</span>
+                </a>
+                <a class="nav-item {% if active == 'connections' %}active{% endif %}" href="{{ url_for('connections_list') }}">
+                    {% include "_icons/globe.svg" ignore missing %}
+                    <span>Connections</span>
+                </a>
+                <a class="nav-item {% if active == 'logs' %}active{% endif %}" href="{{ url_for('logs_view') }}">
+                    {% include "_icons/file.svg" ignore missing %}
+                    <span>Logs</span>
+                </a>
+                <a class="nav-item {% if active == 'alerts' %}active{% endif %}" href="{{ url_for('alerts_view') }}">
+                    {% include "_icons/bell.svg" ignore missing %}
+                    <span>Alerts</span>
+                    {% if nav_active_alerts and nav_active_alerts > 0 %}
+                        <span class="badge">{{ nav_active_alerts }}</span>
+                    {% endif %}
+                </a>
+
+                <div class="nav-label">Конфигурация</div>
+                <a class="nav-item {% if active == 'inbounds' %}active{% endif %}" href="{{ url_for('inbounds_list') }}">
+                    {% include "_icons/inbound.svg" ignore missing %}
+                    <span>Inbounds</span>
+                </a>
+                <a class="nav-item {% if active == 'outbounds' %}active{% endif %}" href="{{ url_for('outbounds_list') }}">
+                    {% include "_icons/arrowup.svg" ignore missing %}
+                    <span>Outbounds</span>
+                </a>
+                <a class="nav-item {% if active == 'routing' %}active{% endif %}" href="{{ url_for('routing_list') }}">
+                    {% include "_icons/shield.svg" ignore missing %}
+                    <span>Routing</span>
+                </a>
+                <a class="nav-item {% if active == 'users' %}active{% endif %}" href="{{ url_for('users_list') }}">
+                    {% include "_icons/users.svg" ignore missing %}
+                    <span>Пользователи</span>
+                    {% if nav_users_count and nav_users_count > 0 %}
+                        <span class="badge">{{ nav_users_count }}</span>
+                    {% endif %}
+                </a>
+
+                <div class="nav-label">Система</div>
+                <a class="nav-item {% if active == 'settings' %}active{% endif %}" href="{{ url_for('settings') }}">
+                    {% include "_icons/settings.svg" ignore missing %}
+                    <span>Настройки</span>
+                </a>
+
+                <div style="flex:1"></div>
+
+                <div class="sb-footer">
+                    <div class="avatar">{{ (session.login or 'A')[:1] | upper }}</div>
+                    <div style="min-width:0">
+                        <div class="name">{{ session.login or 'admin' }}</div>
+                        <div class="sub mono">{{ server_ip or '—' }}</div>
+                    </div>
+                    <a class="icon-btn" href="{{ url_for('logout') }}" title="Выйти" style="margin-left:auto">
+                        {% include "_icons/logout.svg" ignore missing %}
+                    </a>
+                </div>
+            </aside>
+
+            <main class="main">
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                    <div class="flashes">
+                        {% for category, message in messages %}
+                            <div class="flash {{ category }}">{{ message }}</div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                {% endwith %}
+
+                {% block content %}{% endblock %}
+            </main>
         </div>
-    </nav>
-    {% endif %}
+    </div>
+{% endif %}
 
-    <main>
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                {% for category, message in messages %}
-                    <div class="flash flash-{{ category }}">{{ message }}</div>
-                {% endfor %}
-            {% endif %}
-        {% endwith %}
-        {% block content %}{% endblock %}
-    </main>
-
-    <footer>
-        <p>xray-admin · <a href="https://github.com/skilanet/vless-infrastructure-configuration">GitHub</a></p>
-    </footer>
-
-    {% block scripts %}{% endblock %}
+{% block scripts %}{% endblock %}
 </body>
 </html>

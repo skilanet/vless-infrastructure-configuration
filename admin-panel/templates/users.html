@@ -1,53 +1,96 @@
 {% extends "base.html" %}
-{% block title %}Users — xray-admin{% endblock %}
+{% block title %}Пользователи — xray-admin{% endblock %}
 
 {% block content %}
-<header class="page-header">
-    <h1>Users</h1>
-    <a href="{{ url_for('users_new') }}" class="btn-primary">+ New user</a>
-</header>
+<div class="stack">
+    <div class="row">
+        <div>
+            <h1 class="page-title">Пользователи</h1>
+            <div class="page-sub">UUID, привязки к inbound'ам и трафик</div>
+        </div>
+        <div class="right row" style="gap:8px">
+            <form method="GET" action="{{ url_for('users_list') }}" class="search" style="margin:0">
+                {% include "_icons/search.svg" %}
+                <input type="text" name="q" placeholder="email или UUID…" value="{{ q }}">
+            </form>
+            <a class="btn accent" href="{{ url_for('users_new') }}">{% include "_icons/plus.svg" %} Новый юзер</a>
+        </div>
+    </div>
 
-{% if users %}
-<table class="data-table">
-    <thead>
-        <tr>
-            <th>Email</th>
-            <th>UUID</th>
-            <th>Inbounds</th>
-            <th>Up</th>
-            <th>Down</th>
-            <th></th>
-        </tr>
-    </thead>
-    <tbody>
-        {% for u in users %}
-        <tr>
-            <td><strong>{{ u.email }}</strong></td>
-            <td><code class="uuid">{{ u.id[:8] }}…{{ u.id[-4:] }}</code></td>
-            <td>
-                {% for ib in u.inbounds %}
-                    <span class="badge">{{ ib }}</span>
-                {% endfor %}
-            </td>
-            <td>{{ '%.1f' | format(u.uplink / 1048576) }} MB</td>
-            <td>{{ '%.1f' | format(u.downlink / 1048576) }} MB</td>
-            <td>
-                <a href="{{ url_for('users_links', uid=u.id) }}" class="btn-small">QR / Links</a>
-                <a href="{{ url_for('users_edit', uid=u.id) }}" class="btn-small">Edit</a>
-                <form method="POST" action="{{ url_for('users_delete', uid=u.id) }}"
-                      class="inline-form"
-                      onsubmit="return confirm('Удалить юзера «{{ u.email }}»?');">
-                    <button type="submit" class="btn-small btn-danger">Delete</button>
-                </form>
-            </td>
-        </tr>
-        {% endfor %}
-    </tbody>
-</table>
-{% else %}
-<div class="empty-state">
-    <p>Юзеров пока нет.</p>
-    <a href="{{ url_for('users_new') }}" class="btn-primary">+ Создать первого</a>
+    <div class="grid-4">
+        <div class="stat">
+            <div class="label">всего</div>
+            <div class="val">{{ total }}</div>
+            <div class="delta">{{ filtered }} в выборке</div>
+        </div>
+        <div class="stat">
+            <div class="label">↑ upload</div>
+            <div class="val">{{ fmt_bytes(total_up) }}</div>
+            <div class="delta">всего с последнего сброса</div>
+        </div>
+        <div class="stat">
+            <div class="label">↓ download</div>
+            <div class="val">{{ fmt_bytes(total_down) }}</div>
+            <div class="delta">всего с последнего сброса</div>
+        </div>
+        <div class="stat">
+            <div class="label">в среднем</div>
+            <div class="val">{{ fmt_bytes(avg) }}</div>
+            <div class="delta">на одного юзера</div>
+        </div>
+    </div>
+
+    <div class="card">
+        {% if users %}
+        <table class="table">
+            <thead><tr>
+                <th>Email</th><th>UUID</th><th>Inbounds</th><th>↑ Upload</th><th>↓ Download</th><th></th>
+            </tr></thead>
+            <tbody>
+            {% for u in users %}
+            <tr style="cursor:pointer" onclick="window.location='{{ url_for('users_detail', uid=u.id) }}'">
+                <td>
+                    <div class="row" style="gap:10px">
+                        <div class="avatar" style="width:28px; height:28px; font-size:11px">{{ u.email[:1] | upper }}</div>
+                        <div>
+                            <b>{{ u.email }}</b>
+                        </div>
+                    </div>
+                </td>
+                <td><span class="chip mono">{{ fmt_short_uuid(u.id) }}</span></td>
+                <td>
+                    <div class="row" style="gap:6px; flex-wrap:wrap">
+                        {% for i in u.inbounds %}<span class="chip mono">{{ i }}</span>{% endfor %}
+                    </div>
+                </td>
+                <td class="mono">{{ fmt_bytes(u.uplink) }}</td>
+                <td class="mono">{{ fmt_bytes(u.downlink) }}</td>
+                <td onclick="event.stopPropagation()">
+                    <div class="row-actions">
+                        <a class="btn sm" href="{{ url_for('users_detail', uid=u.id) }}">{% include "_icons/qr.svg" %} QR</a>
+                        <a class="btn sm" href="{{ url_for('users_edit', uid=u.id) }}">{% include "_icons/edit.svg" %}</a>
+                        <form method="POST" action="{{ url_for('users_delete', uid=u.id) }}" style="display:inline"
+                              onsubmit="return confirm('Удалить юзера «{{ u.email }}»?');">
+                            <button type="submit" class="btn sm danger">{% include "_icons/trash.svg" %}</button>
+                        </form>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="empty">
+            <div class="empty-ic">{% include "_icons/users.svg" %}</div>
+            <div class="empty-title">{% if q %}Никого не нашли{% else %}Юзеров пока нет{% endif %}</div>
+            <div class="empty-sub">
+                {% if q %}Проверь email или UUID в поиске. Или создай нового юзера.
+                {% else %}Создай первого юзера и получи QR/vless-ссылку для подключения.
+                {% endif %}
+            </div>
+            <a class="btn accent" href="{{ url_for('users_new') }}">{% include "_icons/plus.svg" %} Новый юзер</a>
+        </div>
+        {% endif %}
+    </div>
 </div>
-{% endif %}
 {% endblock %}

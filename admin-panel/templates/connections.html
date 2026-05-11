@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block title %}Connections — xray-admin{% endblock %}
+
+{% block content %}
+<div class="stack">
+    <div class="row">
+        <div>
+            <h1 class="page-title">Connections</h1>
+            <div class="page-sub">Аудит подключений из xray access.log</div>
+        </div>
+        <div class="right row" style="gap:8px">
+            <span class="row" style="gap:6px; font-size:12px; color:var(--muted)">
+                <span class="dot green pulse"></span> live · обновляется по reload
+            </span>
+            <a class="btn" href="{{ url_for('connections_list', user=f_user, inbound=f_inbound, status=f_status, ip=f_ip, period=period, export='csv') }}">
+                {% include "_icons/download.svg" %} Export CSV
+            </a>
+        </div>
+    </div>
+
+    <form method="GET" action="{{ url_for('connections_list') }}" class="filters">
+        <span class="ftag">User</span>
+        <select class="select" name="user" style="width:180px" onchange="this.form.submit()">
+            <option value="">Все</option>
+            {% for u in users %}
+            <option value="{{ u }}" {% if u == f_user %}selected{% endif %}>{{ u }}</option>
+            {% endfor %}
+        </select>
+
+        <span class="ftag">Inbound</span>
+        <select class="select" name="inbound" style="width:160px" onchange="this.form.submit()">
+            <option value="">Все</option>
+            {% for i in inbounds %}
+            <option value="{{ i }}" {% if i == f_inbound %}selected{% endif %}>{{ i }}</option>
+            {% endfor %}
+        </select>
+
+        <span class="ftag">Status</span>
+        <select class="select" name="status" style="width:140px" onchange="this.form.submit()">
+            <option value="">Все</option>
+            <option value="ACCEPT" {% if f_status == 'ACCEPT' %}selected{% endif %}>accept</option>
+            <option value="BLOCK" {% if f_status == 'BLOCK' %}selected{% endif %}>block</option>
+            <option value="ERROR" {% if f_status == 'ERROR' %}selected{% endif %}>error</option>
+        </select>
+
+        <div class="search" style="margin-left:auto; min-width:220px">
+            {% include "_icons/search.svg" %}
+            <input type="text" name="ip" placeholder="IP search…" value="{{ f_ip }}">
+        </div>
+        <button type="submit" class="btn sm">Применить</button>
+        <a class="btn sm ghost" href="{{ url_for('connections_list') }}">Сбросить</a>
+    </form>
+
+    <div class="card">
+        <div style="padding:14px 18px 10px; border-bottom: 1px solid var(--border)">
+            <div class="row">
+                <span style="font-size:12px; color:var(--muted)">Подключений за период · {{ connections|length }}</span>
+                <span class="right" style="font-size:11px; color:var(--muted-2)">парсинг последних 500 строк {{ '/var/log/xray/access.log' }}</span>
+            </div>
+        </div>
+        {% if connections %}
+        <table class="table compact">
+            <thead><tr>
+                <th>Время</th><th>Status</th><th>User</th><th>Source IP</th><th>Destination</th><th>Inbound</th><th>Outbound</th>
+            </tr></thead>
+            <tbody>
+            {% for c in connections %}
+            <tr>
+                <td>
+                    <div><b class="mono" style="font-size:12.5px">{{ c.ts }}</b></div>
+                    <div style="font-size:11px; color:var(--muted-2)">{{ fmt_humans_ago(c.ts) }}</div>
+                </td>
+                <td>
+                    {% if c.kind == 'ACCEPT' %}<span class="chip green">accept</span>
+                    {% elif c.kind == 'BLOCK' %}<span class="chip red">block</span>
+                    {% elif c.kind == 'ERROR' %}<span class="chip red">error</span>
+                    {% else %}<span class="chip">{{ c.kind|lower }}</span>
+                    {% endif %}
+                </td>
+                <td>{% if c.user %}<b>{{ c.user }}</b>{% else %}<span class="em-dash">—</span>{% endif %}</td>
+                <td><span class="mono">{{ c.src or '—' }}</span></td>
+                <td><span class="mono" style="font-size:12px">{{ c.dst or '—' }}</span></td>
+                <td>{% if c.inbound %}<span class="chip mono">{{ c.inbound }}</span>{% else %}<span class="em-dash">—</span>{% endif %}</td>
+                <td>{% if c.outbound %}<span class="chip {% if c.outbound == 'block' %}red{% endif %} mono">{{ c.outbound }}</span>{% else %}<span class="em-dash">—</span>{% endif %}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="empty">
+            <div class="empty-ic">{% include "_icons/globe.svg" %}</div>
+            <div class="empty-title">Подключений не найдено</div>
+            <div class="empty-sub">Возможно, access.log пуст или фильтры слишком узкие. Проверь /var/log/xray/access.log на сервере.</div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

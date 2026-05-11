@@ -147,6 +147,8 @@ $PANEL_USER ALL=(root) NOPASSWD: /usr/local/bin/xray uuid
 
 # Read-only метрики
 $PANEL_USER ALL=(root) NOPASSWD: /usr/local/bin/xray api statsquery --server=127.0.0.1\:10085 -pattern user>>>
+$PANEL_USER ALL=(root) NOPASSWD: /usr/local/bin/xray api statsquery --server=127.0.0.1\:10085 -pattern user>>> -reset
+$PANEL_USER ALL=(root) NOPASSWD: /usr/local/bin/xray api statsquery --server=127.0.0.1\:10085 -pattern inbound>>>
 $PANEL_USER ALL=(root) NOPASSWD: /usr/local/bin/xray api stats --server=127.0.0.1\:10085 -reset=false
 EOF
 
