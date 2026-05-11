@@ -1145,18 +1145,26 @@ def tail_file(path: Path, n: int = 200) -> list[str]:
 
 
 def parse_access_line(line: str) -> dict | None:
-    """Парсинг строки access.log xray.
-    Пример: 2026/05/10 12:34:56 1.2.3.4:443 accepted tcp:google.com:443
-                [vless-main -> direct] email: vera@server"""
+    """Парсинг строки access.log xray. Поддерживаем два формата:
+      a) 2026/05/10 12:34:56.521777 1.2.3.4:443 accepted tcp:host:443 ...
+      b) 2026/05/10 12:34:56.521777 from 1.2.3.4:443 accepted tcp:host:443 ...
+    """
     if not line.strip():
         return None
-    parts = line.split(maxsplit=4)
-    if len(parts) < 4:
+    head = line.split(maxsplit=2)
+    if len(head) < 3:
         return {"raw": line}
-    ts = f"{parts[0]} {parts[1]}"
-    src = parts[2]
-    action = parts[3].lower()
-    rest = parts[4] if len(parts) > 4 else ""
+    ts = f"{head[0]} {head[1]}"
+    tail = head[2]
+    # Optional `from ` prefix перед IP.
+    if tail.startswith("from "):
+        tail = tail[5:]
+    sub = tail.split(maxsplit=2)
+    if len(sub) < 2:
+        return {"ts": ts, "raw": line}
+    src = sub[0]
+    action = sub[1].lower()
+    rest = sub[2] if len(sub) > 2 else ""
     # Найти inbound/outbound в [tag -> tag]
     inbound = None
     outbound = None
