@@ -2208,11 +2208,7 @@ def api_routing_reorder():
 @login_required
 def alerts_view():
     state = evaluate_alerts()
-    raw_active = state.get("active", [])
-    app.logger.warning("DEBUG alerts raw_active types: %r",
-                       [type(a).__name__ for a in raw_active])
-    app.logger.warning("DEBUG alerts raw_active value: %r", raw_active)
-    active = [a for a in raw_active
+    active = [a for a in state.get("active", [])
               if isinstance(a, dict) and a.get("id") and a.get("title")]
     history = [h for h in state.get("history", []) if isinstance(h, dict)]
     return render_template("alerts.html",
