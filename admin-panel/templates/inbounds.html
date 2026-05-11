@@ -10,11 +10,11 @@
         </div>
         <div class="right row" style="gap:8px">
             <div class="tabs">
-                <a class="tab {% if filter == 'all' %}active{% endif %}" href="{{ url_for('inbounds_list', filter='all') }}">Все · {{ total }}</a>
-                <a class="tab {% if filter == 'user' %}active{% endif %}" href="{{ url_for('inbounds_list', filter='user') }}">Пользовательские · {{ user_count }}</a>
-                <a class="tab {% if filter == 'service' %}active{% endif %}" href="{{ url_for('inbounds_list', filter='service') }}">Служебные · {{ service_count }}</a>
+                <a class="tab {% if filter == 'all' %}active{% endif %}" href="{{ url_for('config.inbounds_list', filter='all') }}">Все · {{ total }}</a>
+                <a class="tab {% if filter == 'user' %}active{% endif %}" href="{{ url_for('config.inbounds_list', filter='user') }}">Пользовательские · {{ user_count }}</a>
+                <a class="tab {% if filter == 'service' %}active{% endif %}" href="{{ url_for('config.inbounds_list', filter='service') }}">Служебные · {{ service_count }}</a>
             </div>
-            <a class="btn accent" href="{{ url_for('inbounds_new') }}">{% include "_icons/plus.svg" %} Новый inbound</a>
+            <a class="btn accent" href="{{ url_for('config.inbounds_new') }}">{% include "_icons/plus.svg" %} Новый inbound</a>
         </div>
     </div>
 
@@ -58,8 +58,8 @@
                         {% if r.service %}
                             <span class="chip">read-only</span>
                         {% else %}
-                            <a class="btn sm" href="{{ url_for('inbounds_edit', tag=r.tag) }}">{% include "_icons/edit.svg" %} Edit</a>
-                            <form method="POST" action="{{ url_for('inbounds_delete', tag=r.tag) }}" style="display:inline"
+                            <a class="btn sm" href="{{ url_for('config.inbounds_edit', tag=r.tag) }}">{% include "_icons/edit.svg" %} Edit</a>
+                            <form method="POST" action="{{ url_for('config.inbounds_delete', tag=r.tag) }}" style="display:inline"
                                   onsubmit="return confirm('Удалить inbound «{{ r.tag }}»?');">
                                 <button type="submit" class="btn sm danger">{% include "_icons/trash.svg" %}</button>
                             </form>
@@ -75,7 +75,7 @@
             <div class="empty-ic">{% include "_icons/inbound.svg" %}</div>
             <div class="empty-title">У вас ещё нет inbound'ов</div>
             <div class="empty-sub">Создайте первый VLESS-инбаунд с маскировкой Reality</div>
-            <a class="btn accent" href="{{ url_for('inbounds_new') }}">{% include "_icons/plus.svg" %} Новый inbound</a>
+            <a class="btn accent" href="{{ url_for('config.inbounds_new') }}">{% include "_icons/plus.svg" %} Новый inbound</a>
         </div>
         {% endif %}
     </div>

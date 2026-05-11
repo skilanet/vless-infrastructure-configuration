@@ -9,7 +9,7 @@
             <div class="page-sub mono">02-outbounds.json — направления исходящего трафика</div>
         </div>
         <div class="right">
-            <a class="btn accent" href="{{ url_for('outbounds_new') }}">{% include "_icons/plus.svg" %} Новый outbound</a>
+            <a class="btn accent" href="{{ url_for('config.outbounds_new') }}">{% include "_icons/plus.svg" %} Новый outbound</a>
         </div>
     </div>
 
@@ -39,11 +39,11 @@
                 </td>
                 <td class="actions-cell">
                     <div class="row-actions">
-                        <a class="btn sm" href="{{ url_for('outbounds_edit', tag=o.tag) }}">{% include "_icons/edit.svg" %}</a>
+                        <a class="btn sm" href="{{ url_for('config.outbounds_edit', tag=o.tag) }}">{% include "_icons/edit.svg" %}</a>
                         {% if o.tag in ('direct', 'block', 'api', 'metrics') %}
                             <span class="chip">system</span>
                         {% else %}
-                            <form method="POST" action="{{ url_for('outbounds_delete', tag=o.tag) }}" style="display:inline"
+                            <form method="POST" action="{{ url_for('config.outbounds_delete', tag=o.tag) }}" style="display:inline"
                                   onsubmit="return confirm('Удалить outbound «{{ o.tag }}»?');">
                                 <button type="submit" class="btn sm danger">{% include "_icons/trash.svg" %}</button>
                             </form>
@@ -59,7 +59,7 @@
             <div class="empty-ic">{% include "_icons/arrowup.svg" %}</div>
             <div class="empty-title">Outbound'ов нет</div>
             <div class="empty-sub">Применилась только базовая инфраструктура? Создай 02-outbounds.json в настройках.</div>
-            <a class="btn accent" href="{{ url_for('outbounds_new') }}">{% include "_icons/plus.svg" %} Новый outbound</a>
+            <a class="btn accent" href="{{ url_for('config.outbounds_new') }}">{% include "_icons/plus.svg" %} Новый outbound</a>
         </div>
         {% endif %}
     </div>

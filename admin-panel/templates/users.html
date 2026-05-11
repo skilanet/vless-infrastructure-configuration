@@ -9,11 +9,11 @@
             <div class="page-sub">UUID, привязки к inbound'ам и трафик</div>
         </div>
         <div class="right row" style="gap:8px">
-            <form method="GET" action="{{ url_for('users_list') }}" class="search" style="margin:0">
+            <form method="GET" action="{{ url_for('core.users_list') }}" class="search" style="margin:0">
                 {% include "_icons/search.svg" %}
                 <input type="text" name="q" placeholder="email или UUID…" value="{{ q }}">
             </form>
-            <a class="btn accent" href="{{ url_for('users_new') }}">{% include "_icons/plus.svg" %} Новый юзер</a>
+            <a class="btn accent" href="{{ url_for('core.users_new') }}">{% include "_icons/plus.svg" %} Новый юзер</a>
         </div>
     </div>
 
@@ -44,16 +44,17 @@
         {% if users %}
         <table class="table">
             <thead><tr>
-                <th>Email</th><th>UUID</th><th>Inbounds</th><th>↑ Upload</th><th>↓ Download</th><th></th>
+                <th>Email</th><th>UUID</th><th>Inbounds</th><th>↑ Upload</th><th>↓ Download</th><th>Last seen</th><th></th>
             </tr></thead>
             <tbody>
             {% for u in users %}
-            <tr style="cursor:pointer" onclick="window.location='{{ url_for('users_detail', uid=u.id) }}'">
+            <tr style="cursor:pointer" onclick="window.location='{{ url_for('core.users_detail', uid=u.id) }}'">
                 <td>
                     <div class="row" style="gap:10px">
                         <div class="avatar" style="width:28px; height:28px; font-size:11px">{{ u.email[:1] | upper }}</div>
                         <div>
                             <b>{{ u.email }}</b>
+                            {% if u.online %}<div style="font-size:11px; color:var(--success)"><span class="dot green pulse" style="margin-right:4px"></span>online</div>{% endif %}
                         </div>
                     </div>
                 </td>
@@ -65,11 +66,23 @@
                 </td>
                 <td class="mono">{{ fmt_bytes(u.uplink) }}</td>
                 <td class="mono">{{ fmt_bytes(u.downlink) }}</td>
+                <td>
+                    {% if u.last_ts %}
+                        <div class="row" style="gap:8px">
+                            {% if u.last_geo and u.last_geo.flag %}<span>{{ u.last_geo.flag }}</span>{% endif %}
+                            {% if u.last_geo and u.last_geo.city %}<b style="font-size:13px">{{ u.last_geo.city }}</b>{% endif %}
+                            <span class="mono" style="font-size:11.5px; color:var(--muted)">{{ u.last_src or '' }}</span>
+                            <span style="font-size:11.5px; color:var(--muted-2)">· {{ fmt_humans_ago(u.last_ts) }}</span>
+                        </div>
+                    {% else %}
+                        <span class="em-dash">—</span>
+                    {% endif %}
+                </td>
                 <td onclick="event.stopPropagation()">
                     <div class="row-actions">
-                        <a class="btn sm" href="{{ url_for('users_detail', uid=u.id) }}">{% include "_icons/qr.svg" %} QR</a>
-                        <a class="btn sm" href="{{ url_for('users_edit', uid=u.id) }}">{% include "_icons/edit.svg" %}</a>
-                        <form method="POST" action="{{ url_for('users_delete', uid=u.id) }}" style="display:inline"
+                        <a class="btn sm" href="{{ url_for('core.users_detail', uid=u.id) }}">{% include "_icons/qr.svg" %} QR</a>
+                        <a class="btn sm" href="{{ url_for('core.users_edit', uid=u.id) }}">{% include "_icons/edit.svg" %}</a>
+                        <form method="POST" action="{{ url_for('core.users_delete', uid=u.id) }}" style="display:inline"
                               onsubmit="return confirm('Удалить юзера «{{ u.email }}»?');">
                             <button type="submit" class="btn sm danger">{% include "_icons/trash.svg" %}</button>
                         </form>
@@ -88,7 +101,7 @@
                 {% else %}Создай первого юзера и получи QR/vless-ссылку для подключения.
                 {% endif %}
             </div>
-            <a class="btn accent" href="{{ url_for('users_new') }}">{% include "_icons/plus.svg" %} Новый юзер</a>
+            <a class="btn accent" href="{{ url_for('core.users_new') }}">{% include "_icons/plus.svg" %} Новый юзер</a>
         </div>
         {% endif %}
     </div>

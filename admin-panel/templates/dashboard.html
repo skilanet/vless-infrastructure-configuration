@@ -10,15 +10,15 @@
         </div>
         <div class="right row" style="gap:8px">
             {% if xray_active %}
-                <form method="POST" action="{{ url_for('system_restart') }}" style="display:inline">
+                <form method="POST" action="{{ url_for('sys.system_restart') }}" style="display:inline">
                     <button type="submit" class="btn">{% include "_icons/reload.svg" %} Перезапустить xray</button>
                 </form>
-                <form method="POST" action="{{ url_for('system_stop') }}" style="display:inline"
+                <form method="POST" action="{{ url_for('sys.system_stop') }}" style="display:inline"
                       onsubmit="return confirm('Остановить xray? Клиенты потеряют связь.');">
                     <button type="submit" class="btn danger">{% include "_icons/power.svg" %} Остановить</button>
                 </form>
             {% else %}
-                <form method="POST" action="{{ url_for('system_start') }}" style="display:inline">
+                <form method="POST" action="{{ url_for('sys.system_start') }}" style="display:inline">
                     <button type="submit" class="btn accent">{% include "_icons/power.svg" %} Запустить xray</button>
                 </form>
             {% endif %}
@@ -30,12 +30,12 @@
         <div class="row" style="padding:0 4px">
             <div style="font-size:11px; text-transform:uppercase; letter-spacing:.12em; color:var(--muted)">Needs Attention</div>
             <div class="right">
-                <a class="btn sm ghost" href="{{ url_for('alerts_view') }}">Все алёрты →</a>
+                <a class="btn sm ghost" href="{{ url_for('core.alerts_view') }}">Все алёрты →</a>
             </div>
         </div>
         <div class="grid-2">
             {% for a in alerts[:4] %}
-            <a href="{{ url_for('alerts_view') }}" class="na-card {{ a.severity }}">
+            <a href="{{ url_for('core.alerts_view') }}" class="na-card {{ a.severity }}">
                 <span class="sev-mark {% if a.severity == 'critical' %}red{% elif a.severity == 'warning' %}amber{% else %}green{% endif %}">
                     {% include "_icons/alert.svg" %}
                 </span>
@@ -122,12 +122,45 @@
                 {% endif %}
             </div>
 
+            {% if traffic_series.points %}
+            <div class="card">
+                <div class="card-h">
+                    <h3>Трафик за 24ч</h3>
+                    <span class="sub">↑ {{ fmt_bytes(traffic_series.total_up) }} · ↓ {{ fmt_bytes(traffic_series.total_down) }}</span>
+                </div>
+                <div style="padding:14px 18px 18px">
+                    {% set pts = traffic_series.points %}
+                    {% set max_v = 1 %}
+                    {% for p in pts %}{% if p.up + p.down > max_v %}{% set max_v = p.up + p.down %}{% endif %}{% endfor %}
+                    <svg viewBox="0 0 600 140" preserveAspectRatio="none" style="width:100%; height:140px">
+                        <defs>
+                            <linearGradient id="gUp" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stop-color="#0f8a7a" stop-opacity="0.3"/>
+                                <stop offset="100%" stop-color="#0f8a7a" stop-opacity="0"/>
+                            </linearGradient>
+                        </defs>
+                        {% set n = pts|length %}
+                        {% set step = 600 / (n if n > 1 else 1) %}
+                        {% set path_d = [] %}
+                        {% for p in pts %}
+                            {% set x = (loop.index0 * step) %}
+                            {% set v = p.up + p.down %}
+                            {% set y = 130 - (v / max_v * 120 if max_v else 0) %}
+                            {% if loop.first %}{{ path_d.append('M ' ~ x|round(1) ~ ' ' ~ y|round(1)) or '' }}{% else %}{{ path_d.append('L ' ~ x|round(1) ~ ' ' ~ y|round(1)) or '' }}{% endif %}
+                        {% endfor %}
+                        <path d="{{ path_d|join(' ') }} L 600 140 L 0 140 Z" fill="url(#gUp)"/>
+                        <path d="{{ path_d|join(' ') }}" fill="none" stroke="#0f8a7a" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </div>
+            </div>
+            {% endif %}
+
             <div class="grid-2">
                 <div class="card">
                     <div class="card-h">
                         <h3>Top пользователи</h3>
                         <span class="sub">по трафику</span>
-                        <div class="right"><a class="btn sm ghost" href="{{ url_for('users_list') }}">Все →</a></div>
+                        <div class="right"><a class="btn sm ghost" href="{{ url_for('core.users_list') }}">Все →</a></div>
                     </div>
                     <div style="padding:10px 18px 16px">
                         {% set max_user = 1 %}
@@ -150,6 +183,34 @@
                         {% else %}
                             <div class="empty" style="padding:24px 0">
                                 <div class="empty-sub">пока нет статистики по юзерам</div>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-h">
+                        <h3>Top города</h3>
+                        <span class="sub">по подключениям</span>
+                        <div class="right"><a class="btn sm ghost" href="{{ url_for('core.connections_list') }}">Connections →</a></div>
+                    </div>
+                    <div style="padding:10px 18px 16px">
+                        {% if top_cities %}
+                            {% set max_c = top_cities[0].count %}
+                            {% for c in top_cities %}
+                            {% set pct = (c.count * 100 // max_c) if max_c else 2 %}
+                            <div class="hbar-row">
+                                <div class="hbar-label">
+                                    <span class="hbar-lead">{{ c.flag }}</span>
+                                    <span class="hbar-name">{{ c.city }}</span>
+                                </div>
+                                <div class="hbar-track"><div class="hbar-fill" style="width: {{ pct if pct > 2 else 2 }}%; background: #c8915a"></div></div>
+                                <div class="hbar-val mono">{{ c.count }}</div>
+                            </div>
+                            {% endfor %}
+                        {% else %}
+                            <div class="empty" style="padding:24px 0">
+                                <div class="empty-sub">GeoIP не установлен или нет подключений</div>
                             </div>
                         {% endif %}
                     </div>
@@ -187,7 +248,7 @@
                 <div class="card-h">
                     <h3>Inbounds</h3>
                     <span class="sub">{{ inbounds|length }} правил</span>
-                    <div class="right"><a class="btn sm" href="{{ url_for('inbounds_list') }}">Открыть всё →</a></div>
+                    <div class="right"><a class="btn sm" href="{{ url_for('config.inbounds_list') }}">Открыть всё →</a></div>
                 </div>
                 {% if inbounds %}
                 <table class="table compact">
@@ -220,7 +281,7 @@
                     <div class="empty-ic">{% include "_icons/inbound.svg" %}</div>
                     <div class="empty-title">Пока нет ни одного inbound'а</div>
                     <div class="empty-sub">Создай первый VLESS-инбаунд с маскировкой Reality</div>
-                    <a class="btn accent" href="{{ url_for('inbounds_new') }}">{% include "_icons/plus.svg" %} Новый inbound</a>
+                    <a class="btn accent" href="{{ url_for('config.inbounds_new') }}">{% include "_icons/plus.svg" %} Новый inbound</a>
                 </div>
                 {% endif %}
             </div>
@@ -241,10 +302,10 @@
             <div class="card pad">
                 <h3 style="margin:0 0 10px; font-size:14px; font-weight:600">Быстрые действия</h3>
                 <div class="stack" style="gap:8px">
-                    <a class="btn" href="{{ url_for('inbounds_new') }}" style="justify-content:flex-start">{% include "_icons/plus.svg" %} Создать inbound</a>
-                    <a class="btn" href="{{ url_for('users_new') }}" style="justify-content:flex-start">{% include "_icons/plus.svg" %} Создать юзера</a>
-                    <a class="btn" href="{{ url_for('routing_list') }}" style="justify-content:flex-start">{% include "_icons/shield.svg" %} Правила маршрутизации</a>
-                    <a class="btn" href="{{ url_for('logs_view') }}" style="justify-content:flex-start">{% include "_icons/file.svg" %} Просмотреть логи</a>
+                    <a class="btn" href="{{ url_for('config.inbounds_new') }}" style="justify-content:flex-start">{% include "_icons/plus.svg" %} Создать inbound</a>
+                    <a class="btn" href="{{ url_for('core.users_new') }}" style="justify-content:flex-start">{% include "_icons/plus.svg" %} Создать юзера</a>
+                    <a class="btn" href="{{ url_for('config.routing_list') }}" style="justify-content:flex-start">{% include "_icons/shield.svg" %} Правила маршрутизации</a>
+                    <a class="btn" href="{{ url_for('core.logs_view') }}" style="justify-content:flex-start">{% include "_icons/file.svg" %} Просмотреть логи</a>
                 </div>
             </div>
         </div>

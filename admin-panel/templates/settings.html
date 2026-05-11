@@ -9,12 +9,12 @@
     </div>
 
     <div class="seg">
-        <a class="seg-i {% if tab == 'infra' %}active{% endif %}" href="{{ url_for('settings', tab='infra') }}">Базовая инфраструктура</a>
-        <a class="seg-i {% if tab == 'thresholds' %}active{% endif %}" href="{{ url_for('settings', tab='thresholds') }}">Alert thresholds</a>
-        <a class="seg-i {% if tab == 'notify' %}active{% endif %}" href="{{ url_for('settings', tab='notify') }}">Notifications</a>
-        <a class="seg-i {% if tab == 'geoip' %}active{% endif %}" href="{{ url_for('settings', tab='geoip') }}">GeoIP</a>
-        <a class="seg-i {% if tab == 'backup' %}active{% endif %}" href="{{ url_for('settings', tab='backup') }}">Backup / Restore</a>
-        <a class="seg-i {% if tab == 'admin' %}active{% endif %}" href="{{ url_for('settings', tab='admin') }}">Panel admin</a>
+        <a class="seg-i {% if tab == 'infra' %}active{% endif %}" href="{{ url_for('sys.settings', tab='infra') }}">Базовая инфраструктура</a>
+        <a class="seg-i {% if tab == 'thresholds' %}active{% endif %}" href="{{ url_for('sys.settings', tab='thresholds') }}">Alert thresholds</a>
+        <a class="seg-i {% if tab == 'notify' %}active{% endif %}" href="{{ url_for('sys.settings', tab='notify') }}">Notifications</a>
+        <a class="seg-i {% if tab == 'geoip' %}active{% endif %}" href="{{ url_for('sys.settings', tab='geoip') }}">GeoIP</a>
+        <a class="seg-i {% if tab == 'backup' %}active{% endif %}" href="{{ url_for('sys.settings', tab='backup') }}">Backup / Restore</a>
+        <a class="seg-i {% if tab == 'admin' %}active{% endif %}" href="{{ url_for('sys.settings', tab='admin') }}">Panel admin</a>
     </div>
 
     {% if tab == 'infra' %}
@@ -47,7 +47,7 @@
                 {% endfor %}
                 </tbody>
             </table>
-            <form method="POST" action="{{ url_for('settings_bootstrap') }}" class="row" style="margin-top:14px; gap:14px"
+            <form method="POST" action="{{ url_for('sys.settings_bootstrap') }}" class="row" style="margin-top:14px; gap:14px"
                   onsubmit="return confirm('Создать недостающие служебные файлы и перезапустить xray?');">
                 <label class="row" style="gap:8px; font-size:13px; cursor:pointer">
                     <input type="checkbox" name="overwrite" value="1">
@@ -60,7 +60,7 @@
     {% endif %}
 
     {% if tab == 'thresholds' %}
-    <form method="POST" action="{{ url_for('settings_thresholds') }}">
+    <form method="POST" action="{{ url_for('sys.settings_thresholds') }}">
     <div style="display:grid; grid-template-columns:1fr 1fr; gap:18px">
         {% for key, defn in threshold_defs.items() %}
         {% set cur = thresholds.get(key, defn) %}
@@ -93,7 +93,7 @@
 
     {% if tab == 'notify' %}
     <div class="grid-2">
-        <form method="POST" action="{{ url_for('settings_notify') }}" class="card pad">
+        <form method="POST" action="{{ url_for('sys.settings_notify') }}" class="card pad">
             <div class="row" style="margin-bottom:14px; gap:10px">
                 <h3 style="margin:0; font-size:14px">Telegram bot</h3>
                 <div class="right">
@@ -117,7 +117,7 @@
         </form>
         <div class="card pad">
             <h3 style="margin:0 0 14px; font-size:14px">Что отправляем</h3>
-            <form method="POST" action="{{ url_for('settings_notify') }}">
+            <form method="POST" action="{{ url_for('sys.settings_notify') }}">
                 <input type="hidden" name="telegram_enabled" value="{{ '1' if notify.telegram_enabled else '0' }}">
                 <input type="hidden" name="telegram_token" value="{{ notify.telegram_token or '' }}">
                 <input type="hidden" name="telegram_chat_id" value="{{ notify.telegram_chat_id or '' }}">
@@ -139,7 +139,7 @@
                 <button type="submit" class="btn sm accent mt-12">Сохранить события</button>
             </form>
             <hr class="sep">
-            <form method="POST" action="{{ url_for('settings_notify_test') }}">
+            <form method="POST" action="{{ url_for('sys.settings_notify_test') }}">
                 <button type="submit" class="btn">Test connection</button>
                 <span class="hint" style="margin-left:8px">отправит «тестовое сообщение ✅» в указанный chat</span>
             </form>
@@ -148,19 +148,43 @@
     {% endif %}
 
     {% if tab == 'geoip' %}
-    <div class="card pad" style="max-width:640px">
-        <h3 style="margin:0 0 14px; font-size:14px">GeoIP / Geosite база</h3>
-        <div class="meta-row"><span class="k">geoip.dat</span>
-            <span>{% if geoip.exists %}<span class="chip green">существует</span> <span class="mono">{{ fmt_bytes(geoip.size) }}</span> · {{ fmt_humans_ago(geoip.mtime) }}{% else %}<span class="chip amber">отсутствует</span>{% endif %}</span>
+    <div class="grid-2">
+        <div class="card pad">
+            <h3 style="margin:0 0 14px; font-size:14px">xray geoip / geosite</h3>
+            <div class="meta-row"><span class="k">geoip.dat</span>
+                <span>{% if geoip.exists %}<span class="chip green">существует</span> <span class="mono">{{ fmt_bytes(geoip.size) }}</span> · {{ fmt_humans_ago(geoip.mtime) }}{% else %}<span class="chip amber">отсутствует</span>{% endif %}</span>
+            </div>
+            <div class="meta-row"><span class="k">geosite.dat</span>
+                <span>{% if geoip.geosite_exists %}<span class="chip green">существует</span> <span class="mono">{{ fmt_bytes(geoip.geosite_size) }}</span>{% else %}<span class="chip amber">отсутствует</span>{% endif %}</span>
+            </div>
+            <hr class="sep">
+            <form method="POST" action="{{ url_for('sys.settings_geoip_update') }}">
+                <button type="submit" class="btn accent">{% include "_icons/reload.svg" %} Update database</button>
+                <span style="font-size:12px; color:var(--muted); margin-left:8px">из Loyalsoldier/v2ray-rules-dat releases</span>
+            </form>
         </div>
-        <div class="meta-row"><span class="k">geosite.dat</span>
-            <span>{% if geoip.geosite_exists %}<span class="chip green">существует</span> <span class="mono">{{ fmt_bytes(geoip.geosite_size) }}</span>{% else %}<span class="chip amber">отсутствует</span>{% endif %}</span>
+
+        <div class="card pad">
+            <h3 style="margin:0 0 14px; font-size:14px">MaxMind GeoLite2-City (детект городов)</h3>
+            {% if mmdb.exists %}
+                <div class="meta-row"><span class="k">Файл</span><span class="mono">{{ mmdb.path }}</span></div>
+                <div class="meta-row"><span class="k">Размер</span><span class="mono">{{ fmt_bytes(mmdb.size) }}</span></div>
+                <div class="meta-row"><span class="k">Тип БД</span><span>{{ mmdb.database_type or '—' }}</span></div>
+                <div class="meta-row"><span class="k">Build</span><span>{% if mmdb.build_epoch %}{{ mmdb.build_epoch }}{% else %}—{% endif %}</span></div>
+            {% else %}
+                <div class="banner warn">
+                    {% include "_icons/alert.svg" %}
+                    <span>База GeoLite2-City не найдена — города не определяются.</span>
+                </div>
+                <p style="font-size:12.5px; color:var(--muted); line-height:1.6; margin-top:12px">
+                    Зарегистрируйся на <span class="mono">maxmind.com</span>, скачай <span class="mono">GeoLite2-City.mmdb</span> и положи в один из путей:
+                </p>
+                <ul style="font-size:12.5px; color:var(--muted); line-height:1.8; margin: 4px 0 0 18px">
+                    <li><span class="mono">/var/lib/GeoIP/GeoLite2-City.mmdb</span></li>
+                    <li><span class="mono">/var/lib/xray-admin/GeoLite2-City.mmdb</span></li>
+                </ul>
+            {% endif %}
         </div>
-        <hr class="sep">
-        <form method="POST" action="{{ url_for('settings_geoip_update') }}">
-            <button type="submit" class="btn accent">{% include "_icons/reload.svg" %} Update database</button>
-            <span style="font-size:12px; color:var(--muted); margin-left:8px">скачивает Loyalsoldier/v2ray-rules-dat releases</span>
-        </form>
     </div>
     {% endif %}
 
@@ -171,7 +195,7 @@
             <p style="font-size:13px; color:var(--muted); margin:0 0 14px">
                 Архив <span class="mono">conf.d/</span> + <span class="mono">admin-config.json</span> + <span class="mono">alerts.json</span>
             </p>
-            <form method="POST" action="{{ url_for('settings_backup_create') }}" style="display:inline">
+            <form method="POST" action="{{ url_for('sys.settings_backup_create') }}" style="display:inline">
                 <button type="submit" class="btn accent">Создать backup</button>
             </form>
             {% if backups %}
@@ -183,7 +207,7 @@
                     <td><span class="chip mono">{{ b.name }}</span></td>
                     <td class="mono">{{ fmt_bytes(b.size) }}</td>
                     <td class="mono" style="color:var(--muted)">{{ fmt_humans_ago(b.mtime) }}</td>
-                    <td class="actions-cell"><a class="btn sm" href="{{ url_for('settings_backup_download', name=b.name) }}">{% include "_icons/download.svg" %}</a></td>
+                    <td class="actions-cell"><a class="btn sm" href="{{ url_for('sys.settings_backup_download', name=b.name) }}">{% include "_icons/download.svg" %}</a></td>
                 </tr>
                 {% endfor %}
                 </tbody>
@@ -192,7 +216,7 @@
         </div>
         <div class="card pad">
             <h3 style="margin:0 0 14px; font-size:14px">Restore</h3>
-            <form method="POST" action="{{ url_for('settings_backup_restore') }}" enctype="multipart/form-data"
+            <form method="POST" action="{{ url_for('sys.settings_backup_restore') }}" enctype="multipart/form-data"
                   onsubmit="return confirm('Восстановление перезапишет текущий conf.d/. Pre-restore snapshot будет создан автоматически. Продолжить?');">
                 <div class="field"><label>Файл backup (.tar.gz)</label><input class="input" type="file" name="file" accept=".tar.gz,.tgz" required></div>
                 <div class="banner warn mt-12">
@@ -208,7 +232,7 @@
     {% if tab == 'admin' %}
     <div class="card pad" style="max-width:560px">
         <h3 style="margin:0 0 14px; font-size:14px">Сменить пароль панели</h3>
-        <form method="POST" action="{{ url_for('settings_password') }}">
+        <form method="POST" action="{{ url_for('sys.settings_password') }}">
             <div class="stack" style="gap:12px">
                 <div class="field"><label>Текущий пароль</label><input type="password" class="input" name="current" required></div>
                 <div class="field"><label>Новый пароль (мин. 8 символов)</label><input type="password" class="input" name="new" minlength="8" required></div>

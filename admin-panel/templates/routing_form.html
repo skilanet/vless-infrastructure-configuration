@@ -5,9 +5,9 @@
 {% block content %}
 <div class="stack">
     <div class="row">
-        <a class="btn ghost" href="{{ url_for('routing_list') }}">{% include "_icons/back.svg" %} Routing</a>
+        <a class="btn ghost" href="{{ url_for('config.routing_list') }}">{% include "_icons/back.svg" %} Routing</a>
         <div class="right row" style="gap:8px">
-            <a class="btn" href="{{ url_for('routing_list') }}">Отмена</a>
+            <a class="btn" href="{{ url_for('config.routing_list') }}">Отмена</a>
             <button type="submit" form="routing-form" class="btn accent">{{ 'Сохранить' if is_edit else 'Создать правило' }}</button>
         </div>
     </div>

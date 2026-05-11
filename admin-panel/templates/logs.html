@@ -10,8 +10,8 @@
         </div>
         <div class="right row" style="gap:8px">
             <div class="tabs">
-                <a class="tab {% if kind == 'access' %}active{% endif %}" href="{{ url_for('logs_view', kind='access') }}">access.log</a>
-                <a class="tab {% if kind == 'error' %}active{% endif %}" href="{{ url_for('logs_view', kind='error') }}">error.log</a>
+                <a class="tab {% if kind == 'access' %}active{% endif %}" href="{{ url_for('core.logs_view', kind='access') }}">access.log</a>
+                <a class="tab {% if kind == 'error' %}active{% endif %}" href="{{ url_for('core.logs_view', kind='error') }}">error.log</a>
             </div>
         </div>
     </div>
@@ -26,7 +26,7 @@
             <span class="dot green pulse"></span> обновляется каждые 5с
         </span>
         <div class="right row" style="gap:6px">
-            <a class="btn sm" href="{{ url_for('logs_view', kind=kind, download=1) }}">{% include "_icons/download.svg" %} Скачать</a>
+            <a class="btn sm" href="{{ url_for('core.logs_view', kind=kind, download=1) }}">{% include "_icons/download.svg" %} Скачать</a>
             <button type="button" class="btn sm" id="clear-view">Clear view</button>
         </div>
     </div>

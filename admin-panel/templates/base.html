@@ -48,19 +48,19 @@
                 </div>
 
                 <div class="nav-label">Мониторинг</div>
-                <a class="nav-item {% if nav_active == 'overview' %}active{% endif %}" href="{{ url_for('dashboard') }}">
+                <a class="nav-item {% if nav_active == 'overview' %}active{% endif %}" href="{{ url_for('core.dashboard') }}">
                     {% include "_icons/dashboard.svg" ignore missing %}
                     <span>Обзор</span>
                 </a>
-                <a class="nav-item {% if nav_active == 'connections' %}active{% endif %}" href="{{ url_for('connections_list') }}">
+                <a class="nav-item {% if nav_active == 'connections' %}active{% endif %}" href="{{ url_for('core.connections_list') }}">
                     {% include "_icons/globe.svg" ignore missing %}
                     <span>Connections</span>
                 </a>
-                <a class="nav-item {% if nav_active == 'logs' %}active{% endif %}" href="{{ url_for('logs_view') }}">
+                <a class="nav-item {% if nav_active == 'logs' %}active{% endif %}" href="{{ url_for('core.logs_view') }}">
                     {% include "_icons/file.svg" ignore missing %}
                     <span>Logs</span>
                 </a>
-                <a class="nav-item {% if nav_active == 'alerts' %}active{% endif %}" href="{{ url_for('alerts_view') }}">
+                <a class="nav-item {% if nav_active == 'alerts' %}active{% endif %}" href="{{ url_for('core.alerts_view') }}">
                     {% include "_icons/bell.svg" ignore missing %}
                     <span>Alerts</span>
                     {% if nav_active_alerts and nav_active_alerts > 0 %}
@@ -69,19 +69,19 @@
                 </a>
 
                 <div class="nav-label">Конфигурация</div>
-                <a class="nav-item {% if nav_active == 'inbounds' %}active{% endif %}" href="{{ url_for('inbounds_list') }}">
+                <a class="nav-item {% if nav_active == 'inbounds' %}active{% endif %}" href="{{ url_for('config.inbounds_list') }}">
                     {% include "_icons/inbound.svg" ignore missing %}
                     <span>Inbounds</span>
                 </a>
-                <a class="nav-item {% if nav_active == 'outbounds' %}active{% endif %}" href="{{ url_for('outbounds_list') }}">
+                <a class="nav-item {% if nav_active == 'outbounds' %}active{% endif %}" href="{{ url_for('config.outbounds_list') }}">
                     {% include "_icons/arrowup.svg" ignore missing %}
                     <span>Outbounds</span>
                 </a>
-                <a class="nav-item {% if nav_active == 'routing' %}active{% endif %}" href="{{ url_for('routing_list') }}">
+                <a class="nav-item {% if nav_active == 'routing' %}active{% endif %}" href="{{ url_for('config.routing_list') }}">
                     {% include "_icons/shield.svg" ignore missing %}
                     <span>Routing</span>
                 </a>
-                <a class="nav-item {% if nav_active == 'users' %}active{% endif %}" href="{{ url_for('users_list') }}">
+                <a class="nav-item {% if nav_active == 'users' %}active{% endif %}" href="{{ url_for('core.users_list') }}">
                     {% include "_icons/users.svg" ignore missing %}
                     <span>Пользователи</span>
                     {% if nav_users_count and nav_users_count > 0 %}
@@ -90,7 +90,7 @@
                 </a>
 
                 <div class="nav-label">Система</div>
-                <a class="nav-item {% if nav_active == 'settings' %}active{% endif %}" href="{{ url_for('settings') }}">
+                <a class="nav-item {% if nav_active == 'settings' %}active{% endif %}" href="{{ url_for('sys.settings') }}">
                     {% include "_icons/settings.svg" ignore missing %}
                     <span>Настройки</span>
                 </a>
@@ -103,7 +103,7 @@
                         <div class="name">{{ session.login or 'admin' }}</div>
                         <div class="sub mono">{{ server_ip or '—' }}</div>
                     </div>
-                    <a class="icon-btn" href="{{ url_for('logout') }}" title="Выйти" style="margin-left:auto">
+                    <a class="icon-btn" href="{{ url_for('auth.logout') }}" title="Выйти" style="margin-left:auto">
                         {% include "_icons/logout.svg" ignore missing %}
                     </a>
                 </div>

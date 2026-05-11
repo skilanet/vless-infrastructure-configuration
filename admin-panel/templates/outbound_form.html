@@ -5,9 +5,9 @@
 {% block content %}
 <div class="stack">
     <div class="row">
-        <a class="btn ghost" href="{{ url_for('outbounds_list') }}">{% include "_icons/back.svg" %} Outbounds</a>
+        <a class="btn ghost" href="{{ url_for('config.outbounds_list') }}">{% include "_icons/back.svg" %} Outbounds</a>
         <div class="right row" style="gap:8px">
-            <a class="btn" href="{{ url_for('outbounds_list') }}">Отмена</a>
+            <a class="btn" href="{{ url_for('config.outbounds_list') }}">Отмена</a>
             <button type="submit" form="ob-form" class="btn accent">{{ 'Сохранить' if is_edit else 'Создать outbound' }}</button>
         </div>
     </div>

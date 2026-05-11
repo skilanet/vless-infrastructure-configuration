@@ -9,7 +9,7 @@
             <div class="page-sub">Активные инциденты и история</div>
         </div>
         <div class="right">
-            <a class="btn" href="{{ url_for('settings', tab='thresholds') }}">{% include "_icons/settings.svg" %} Настройки порогов</a>
+            <a class="btn" href="{{ url_for('sys.settings', tab='thresholds') }}">{% include "_icons/settings.svg" %} Настройки порогов</a>
         </div>
     </div>
 
@@ -34,13 +34,13 @@
                     <div class="na-title" style="font-size:14.5px">{{ a.title }}</div>
                     <div class="na-sub" style="margin-top:4px">{{ a.sub }}</div>
                     <div class="row" style="gap:6px; margin-top:12px">
-                        <form method="POST" action="{{ url_for('alerts_ack', alert_id=a.id) }}" style="display:inline">
+                        <form method="POST" action="{{ url_for('core.alerts_ack', alert_id=a.id) }}" style="display:inline">
                             <button type="submit" class="btn sm">{% include "_icons/check.svg" %} Acknowledge</button>
                         </form>
-                        <form method="POST" action="{{ url_for('alerts_snooze', alert_id=a.id) }}" style="display:inline">
+                        <form method="POST" action="{{ url_for('core.alerts_snooze', alert_id=a.id) }}" style="display:inline">
                             <button type="submit" class="btn sm">Snooze 1h</button>
                         </form>
-                        <form method="POST" action="{{ url_for('alerts_dismiss', alert_id=a.id) }}" style="display:inline"
+                        <form method="POST" action="{{ url_for('core.alerts_dismiss', alert_id=a.id) }}" style="display:inline"
                               onsubmit="return confirm('Скрыть алёрт «{{ a.title }}»?');">
                             <button type="submit" class="btn sm danger">Dismiss</button>
                         </form>

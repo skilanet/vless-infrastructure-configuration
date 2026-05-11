@@ -9,7 +9,7 @@
             <div class="page-sub mono">01-routing.json — правила применяются сверху вниз</div>
         </div>
         <div class="right">
-            <a class="btn accent" href="{{ url_for('routing_new') }}">{% include "_icons/plus.svg" %} Новое правило</a>
+            <a class="btn accent" href="{{ url_for('config.routing_new') }}">{% include "_icons/plus.svg" %} Новое правило</a>
         </div>
     </div>
 
@@ -51,14 +51,14 @@
                     </span>
                 </td>
                 <td>
-                    <form method="POST" action="{{ url_for('routing_toggle', idx=r.idx) }}" style="display:inline">
+                    <form method="POST" action="{{ url_for('config.routing_toggle', idx=r.idx) }}" style="display:inline">
                         <button type="submit" class="sw {% if r.enabled %}on{% endif %}" title="включить/выключить"></button>
                     </form>
                 </td>
                 <td class="actions-cell">
                     <div class="row-actions">
-                        <a class="btn sm" href="{{ url_for('routing_edit', idx=r.idx) }}">{% include "_icons/edit.svg" %}</a>
-                        <form method="POST" action="{{ url_for('routing_delete', idx=r.idx) }}" style="display:inline"
+                        <a class="btn sm" href="{{ url_for('config.routing_edit', idx=r.idx) }}">{% include "_icons/edit.svg" %}</a>
+                        <form method="POST" action="{{ url_for('config.routing_delete', idx=r.idx) }}" style="display:inline"
                               onsubmit="return confirm('Удалить правило #{{ r.idx + 1 }}?');">
                             <button type="submit" class="btn sm danger">{% include "_icons/trash.svg" %}</button>
                         </form>
@@ -73,7 +73,7 @@
             <div class="empty-ic">{% include "_icons/shield.svg" %}</div>
             <div class="empty-title">Правил маршрутизации нет</div>
             <div class="empty-sub">Создай первое правило или применИ базовую инфраструктуру в настройках.</div>
-            <a class="btn accent" href="{{ url_for('routing_new') }}">{% include "_icons/plus.svg" %} Новое правило</a>
+            <a class="btn accent" href="{{ url_for('config.routing_new') }}">{% include "_icons/plus.svg" %} Новое правило</a>
         </div>
         {% endif %}
     </div>

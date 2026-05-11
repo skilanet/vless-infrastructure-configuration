@@ -4,10 +4,10 @@
 {% block content %}
 <div class="stack">
     <div class="row">
-        <a class="btn ghost" href="{{ url_for('users_list') }}">{% include "_icons/back.svg" %} Пользователи</a>
+        <a class="btn ghost" href="{{ url_for('core.users_list') }}">{% include "_icons/back.svg" %} Пользователи</a>
         <div class="right row" style="gap:8px">
-            <a class="btn" href="{{ url_for('users_edit', uid=user.id) }}">{% include "_icons/edit.svg" %} Edit</a>
-            <form method="POST" action="{{ url_for('users_delete', uid=user.id) }}" style="display:inline"
+            <a class="btn" href="{{ url_for('core.users_edit', uid=user.id) }}">{% include "_icons/edit.svg" %} Edit</a>
+            <form method="POST" action="{{ url_for('core.users_delete', uid=user.id) }}" style="display:inline"
                   onsubmit="return confirm('Удалить юзера «{{ user.email }}»?');">
                 <button type="submit" class="btn danger">{% include "_icons/trash.svg" %} Удалить</button>
             </form>
@@ -20,6 +20,12 @@
             <h1 class="page-title">{{ user.email }}</h1>
             <div class="row" style="gap:8px; margin-top:6px">
                 <span class="mono" style="font-size:12px; color:var(--muted)">{{ user.id }}</span>
+                {% if last_seen %}
+                <span style="font-size:12.5px; color:var(--muted-2)">·</span>
+                {% if last_geo and last_geo.flag %}<span>{{ last_geo.flag }}</span>{% endif %}
+                {% if last_geo and last_geo.city %}<span style="font-size:12.5px">{{ last_geo.city }}</span>{% endif %}
+                <span style="font-size:12.5px; color:var(--muted)">· последний коннект {{ fmt_humans_ago(last_seen) }}</span>
+                {% endif %}
             </div>
         </div>
     </div>
@@ -52,15 +58,20 @@
                 <div class="card-h">
                     <h3>Последние подключения</h3>
                     <span class="sub">{{ recent|length }} за период</span>
-                    <div class="right"><a class="btn sm ghost" href="{{ url_for('connections_list', user=user.email) }}">Все Connections →</a></div>
+                    <div class="right"><a class="btn sm ghost" href="{{ url_for('core.connections_list', user=user.email) }}">Все Connections →</a></div>
                 </div>
                 <table class="table compact">
-                    <thead><tr><th>Время</th><th>IP</th><th>Inbound</th><th>Destination</th></tr></thead>
+                    <thead><tr><th>Время</th><th>IP</th><th>Город</th><th>Inbound</th><th>Destination</th></tr></thead>
                     <tbody>
                     {% for c in recent %}
                     <tr>
                         <td class="mono" style="font-size:12px">{{ c.ts }}</td>
                         <td><span class="mono">{{ c.src }}</span></td>
+                        <td>
+                            {% if c.geo_city %}
+                                <span class="row" style="gap:6px"><span>{{ c.geo_flag }}</span><span>{{ c.geo_city }}</span></span>
+                            {% else %}<span class="em-dash">—</span>{% endif %}
+                        </td>
                         <td>{% if c.inbound %}<span class="chip mono">{{ c.inbound }}</span>{% else %}<span class="em-dash">—</span>{% endif %}</td>
                         <td><span class="mono" style="font-size:12px">{{ c.dst or '—' }}</span></td>
                     </tr>
@@ -111,7 +122,7 @@
                         <div class="empty-ic">{% include "_icons/qr.svg" %}</div>
                         <div class="empty-title">Нет ссылок</div>
                         <div class="empty-sub">юзер не привязан ни к одному VLESS-инбаунду</div>
-                        <a class="btn accent" href="{{ url_for('users_edit', uid=user.id) }}">Привязать</a>
+                        <a class="btn accent" href="{{ url_for('core.users_edit', uid=user.id) }}">Привязать</a>
                     </div>
                 </div>
             {% endif %}
