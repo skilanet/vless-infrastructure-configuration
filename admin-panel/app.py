@@ -1128,24 +1128,25 @@ def parse_access_line(line: str) -> dict | None:
 
 
 def parse_error_line(line: str) -> dict:
-    """Минимальный парсер error.log — выделяет level."""
+    """Минимальный парсер error.log — выделяет level и тело без timestamp."""
     if not line.strip():
         return {"raw": line}
-    parts = line.split(maxsplit=3)
-    ts = f"{parts[0]} {parts[1]}" if len(parts) >= 2 else ""
+    parts = line.split(maxsplit=2)
+    if len(parts) < 2:
+        return {"ts": "", "level": "INFO", "body": line, "raw": line}
+    ts = f"{parts[0]} {parts[1]}"
+    rest = parts[2] if len(parts) > 2 else ""
     level = "INFO"
-    body = line
-    m = re.search(r"\[(Info|Warning|Error|Debug)\]", line, re.IGNORECASE)
+    m = re.match(r"^\[(Info|Warning|Error|Debug)\]\s*", rest, re.IGNORECASE)
     if m:
         level = m.group(1).upper()
-        if level == "INFORMATION":
-            level = "INFO"
         if level == "WARNING":
             level = "WARN"
+        rest = rest[m.end():]
     return {
         "ts": ts,
         "level": level,
-        "body": body,
+        "body": rest,
         "raw": line,
     }
 
@@ -1166,7 +1167,10 @@ def collect_recent_connections(limit: int = 200) -> list[dict]:
 @app.context_processor
 def inject_globals():
     try:
-        active = load_alerts_state().get("active", []) if session.get("logged_in") else []
+        if session.get("logged_in"):
+            active = [a for a in load_alerts_state().get("active", []) if isinstance(a, dict)]
+        else:
+            active = []
     except Exception:
         active = []
     try:
@@ -1207,15 +1211,26 @@ def fmt_short_uuid(uid: str) -> str:
     return f"{uid[:8]}…{uid[-4:]}"
 
 
-def fmt_humans_ago(ts: str | datetime) -> str:
+def fmt_humans_ago(ts) -> str:
+    if ts is None:
+        return "—"
     if isinstance(ts, str):
-        try:
-            ts = datetime.fromisoformat(ts)
-        except ValueError:
+        # Try ISO first, then xray access.log timestamp, with optional ms tail.
+        parsed = None
+        for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S", "%Y/%m/%d %H:%M:%S"):
             try:
-                ts = datetime.strptime(ts, "%Y/%m/%d %H:%M:%S")
-            except ValueError:
+                parsed = datetime.strptime(ts[: len(fmt) + 4].split(".")[0], fmt)
+                break
+            except (ValueError, IndexError):
+                continue
+        if parsed is None:
+            try:
+                parsed = datetime.fromisoformat(ts)
+            except (ValueError, TypeError):
                 return ts
+        ts = parsed
+    if not isinstance(ts, datetime):
+        return "—"
     delta = datetime.now() - ts
     sec = int(delta.total_seconds())
     if sec < 60:
@@ -2178,9 +2193,11 @@ def api_routing_reorder():
 @login_required
 def alerts_view():
     state = evaluate_alerts()
+    active = [a for a in state.get("active", []) if isinstance(a, dict)]
+    history = [h for h in state.get("history", []) if isinstance(h, dict)]
     return render_template("alerts.html",
-                           active=state.get("active", []),
-                           history=list(reversed(state.get("history", [])[-50:])))
+                           active=active,
+                           history=list(reversed(history[-50:])))
 
 
 @app.route("/alerts/<alert_id>/ack", methods=["POST"])

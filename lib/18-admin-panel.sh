@@ -157,9 +157,11 @@ Group=$PANEL_USER
 # Явный supplementary — чтобы доступ к /usr/local/etc/xray (root:xray 750)
 # не зависел от того, успел ли NSS-кеш заметить usermod -aG.
 SupplementaryGroups=$XRAY_USER
-WorkingDirectory=$PANEL_DIR
+# WorkingDirectory=/tmp: gunicorn 26+ создаёт .gunicorn control-socket в cwd, а
+# /opt/xray-admin под ProtectSystem=strict — read-only. PrivateTmp=true даёт
+# приватный writable /tmp на namespace процесса.
+WorkingDirectory=/tmp
 ExecStart=$PANEL_DIR/venv/bin/gunicorn \\
-    --chdir /tmp \\
     --pythonpath $PANEL_DIR \\
     --bind $PANEL_BIND:$PANEL_PORT \\
     --workers 2 \\
@@ -167,7 +169,6 @@ ExecStart=$PANEL_DIR/venv/bin/gunicorn \\
     --access-logfile - \\
     --error-logfile - \\
     --worker-tmp-dir /dev/shm \\
-    --control-socket-path /tmp/xray-admin-control.sock \\
     app:app
 Restart=on-failure
 RestartSec=5s
