@@ -20,6 +20,8 @@ def load_alerts_state() -> dict:
             state = json.load(f)
     except (OSError, json.JSONDecodeError):
         state = {}
+    if not isinstance(state, dict):  # валидный, но не-dict JSON ([], "foo", 42)
+        state = {}
     state.setdefault("thresholds", {})
     for k, v in DEFAULT_THRESHOLDS.items():
         state["thresholds"].setdefault(k, v)

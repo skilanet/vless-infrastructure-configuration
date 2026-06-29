@@ -136,6 +136,32 @@ def read_traffic_series(hours: int = 24) -> dict:
             "total_down": total_down, "bucket_sec": bucket_sec}
 
 
+def read_connections_per_hour(hours: int = 24) -> list[dict]:
+    """Среднее число установленных соединений по часам — из gauge в metrics DB.
+    Раньше брали хвост access.log (2000 строк) → на нагруженном сервере старые
+    часы недосчитывались, потому что не попадали в хвост."""
+    now = int(time.time())
+    since = now - hours * 3600
+    buckets: dict[int, float] = {}
+    try:
+        with _conn() as c:
+            cur = c.execute(
+                "SELECT (ts/3600)*3600 AS h, AVG(value) FROM samples "
+                "WHERE kind='system' AND key='connections' AND ts>=? GROUP BY h",
+                (since,),
+            )
+            buckets = {int(h): v for h, v in cur.fetchall()}
+    except Exception:
+        buckets = {}
+    base = (now // 3600) * 3600
+    out = []
+    for i in range(hours):
+        h = base - (hours - 1 - i) * 3600
+        out.append({"hour": time.strftime("%H:%M", time.localtime(h)),
+                    "count": round(buckets.get(h, 0))})
+    return out
+
+
 def read_user_series(email: str, hours: int = 24) -> dict:
     """Трафик одного юзера."""
     try:

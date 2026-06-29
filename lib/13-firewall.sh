@@ -23,9 +23,12 @@ remove_rules_with_comment() {
     local comment_pattern="$1"
     while true; do
         # Находим самый большой номер правила, у которого в комментарии — наш паттерн
+        # gawk-only 3-arg match() ломается на mawk (дефолт Debian/Ubuntu),
+        # поэтому фильтруем grep'ом и вытаскиваем номер sed'ом — portable.
         local idx
         idx=$(ufw status numbered 2>/dev/null \
-              | awk -v p="$comment_pattern" '$0 ~ p { match($0, /\[ *([0-9]+) *\]/, a); if (a[1] != "") print a[1] }' \
+              | grep -E "$comment_pattern" \
+              | sed -n 's/^\[ *\([0-9]\+\).*/\1/p' \
               | sort -rn | head -1)
         [[ -z "$idx" ]] && break
         yes | ufw delete "$idx" >/dev/null 2>&1 || break

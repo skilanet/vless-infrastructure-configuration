@@ -300,7 +300,8 @@ def settings_backup_restore():
                     raise ValueError("backup содержит подозрительные пути")
             for m in tar.getmembers():
                 if m.name.startswith("conf.d/"):
-                    tar.extract(m, str(CONFIG_DIR.parent))
+                    # filter="data" блокирует symlink/hardlink-членов и traversal
+                    tar.extract(m, str(CONFIG_DIR.parent), filter="data")
         ok, msg = systemctl("restart")
         if ok:
             flash(f"восстановлено; pre-restore snapshot: {pre_snapshot.name}", "success")

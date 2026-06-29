@@ -12,7 +12,7 @@ from ..config import (CONFIG_DIR, DEFAULT_SNI_OPTIONS,
 from ..outbounds import read_outbounds, write_outbounds, outbound_summary
 from ..routing import (read_routing_rules, write_routing_rules, rule_summary)
 from ..state import (build_inbound, collect_inbounds, collect_vless_inbounds,
-                     find_inbound_by_tag, list_config_files,
+                     find_inbound_by_tag, inbound_row, list_config_files,
                      read_config_file, write_config_file,
                      resolve_dest, validate_port, validate_sni, validate_tag)
 from ..system import systemctl, ufw_allow, ufw_delete
@@ -29,24 +29,7 @@ bp = Blueprint("config", __name__)
 def inbounds_list():
     all_inbounds = collect_inbounds()
     filter_kind = request.args.get("filter", "all")
-    rows = []
-    for ib in all_inbounds:
-        ss = ib.get("streamSettings", {}) or {}
-        rs = ss.get("realitySettings", {}) or {}
-        xs = ss.get("xhttpSettings", {}) or {}
-        sns = rs.get("serverNames") or []
-        is_service = ib.get("listen") == "127.0.0.1" or ib.get("protocol") != "vless"
-        rows.append({
-            "tag": ib.get("tag", "—"),
-            "port": ib.get("port"),
-            "proto": ib.get("protocol", "—"),
-            "transport": ss.get("network", "—"),
-            "mode": xs.get("mode"),
-            "sni": sns[0] if sns else None,
-            "clients": len((ib.get("settings") or {}).get("clients", [])),
-            "service": is_service,
-            "file": ib.get("_file", "—"),
-        })
+    rows = [inbound_row(ib) for ib in all_inbounds]
     user_rows = [r for r in rows if not r["service"]]
     service_rows = [r for r in rows if r["service"]]
     if filter_kind == "user":

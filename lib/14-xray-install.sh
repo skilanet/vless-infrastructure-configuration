@@ -21,8 +21,11 @@ else
     trap 'rm -rf "$TMPDIR"' EXIT
     chmod 700 "$TMPDIR"
 
-    # Можно переопределить URL через env (для пиннига к конкретному коммиту в проде).
-    INSTALLER_URL="${XRAY_INSTALLER_URL:-https://github.com/XTLS/Xray-install/raw/main/install-release.sh}"
+    # Пин к конкретному коммиту (не мутабельная ветка main) + дефолтный sha256 →
+    # TOFU/RCE закрыт по умолчанию, а не опционально. Оба можно переопределить env.
+    XRAY_INSTALLER_COMMIT="${XRAY_INSTALLER_COMMIT:-e741a4f56d368afbb9e5be3361b40c4552d3710d}"
+    INSTALLER_URL="${XRAY_INSTALLER_URL:-https://github.com/XTLS/Xray-install/raw/$XRAY_INSTALLER_COMMIT/install-release.sh}"
+    XRAY_INSTALLER_SHA256="${XRAY_INSTALLER_SHA256:-7f70c95f6b418da8b4f4883343d602964915e28748993870fd554383afdbe555}"
     INSTALLER_PATH="$TMPDIR/install-release.sh"
 
     if ! curl -fsSL --proto '=https' --tlsv1.2 "$INSTALLER_URL" -o "$INSTALLER_PATH"; then

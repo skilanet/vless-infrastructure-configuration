@@ -13,6 +13,11 @@ set -euo pipefail
 source "$LIB_DIR/common.sh"
 source "$STATE_FILE"
 
+if ! ${INSTALL_PANEL:-true}; then
+    log_info "веб-панель пропущена по выбору юзера"
+    exit 0
+fi
+
 PANEL_DIR="/opt/xray-admin"
 PANEL_CONFIG="/etc/xray-admin/config.json"
 PANEL_BIND="${PANEL_BIND:-127.0.0.1}"

@@ -64,13 +64,14 @@ prompt_string() {
     fi
 
     if [[ -n "$default" ]]; then
-        read -p "${BOLD}$question${RESET} [${GRAY}$default${RESET}]: " input
-        eval "$var_name=\"${input:-$default}\""
+        read -r -p "${BOLD}$question${RESET} [${GRAY}$default${RESET}]: " input
+        # printf -v вместо eval: $input — пользовательский ввод, eval = инъекция кода root
+        printf -v "$var_name" '%s' "${input:-$default}"
     else
         while true; do
-            read -p "${BOLD}$question${RESET}: " input
+            read -r -p "${BOLD}$question${RESET}: " input
             if [[ -n "$input" ]]; then
-                eval "$var_name=\"$input\""
+                printf -v "$var_name" '%s' "$input"
                 break
             fi
             log_warn "поле обязательное"
@@ -91,11 +92,11 @@ prompt_yesno() {
     fi
 
     while true; do
-        read -p "${BOLD}$question${RESET} $hint: " answer
+        read -r -p "${BOLD}$question${RESET} $hint: " answer
         answer=${answer:-$default}
         case "${answer,,}" in
-            y|yes) eval "$var_name=true"; return 0 ;;
-            n|no)  eval "$var_name=false"; return 0 ;;
+            y|yes) printf -v "$var_name" '%s' true; return 0 ;;
+            n|no)  printf -v "$var_name" '%s' false; return 0 ;;
             *)     log_warn "введи y или n" ;;
         esac
     done
@@ -110,10 +111,10 @@ prompt_int() {
     local var_name=$5
 
     while true; do
-        read -p "${BOLD}$question${RESET} (${min}-${max}) [${GRAY}$default${RESET}]: " input
+        read -r -p "${BOLD}$question${RESET} (${min}-${max}) [${GRAY}$default${RESET}]: " input
         input=${input:-$default}
         if [[ "$input" =~ ^[0-9]+$ ]] && (( input >= min && input <= max )); then
-            eval "$var_name=$input"
+            printf -v "$var_name" '%s' "$input"
             return 0
         fi
         log_warn "введи число от $min до $max"
@@ -136,10 +137,10 @@ prompt_list() {
     done
 
     while true; do
-        read -p "Выбор [${GRAY}$default_idx${RESET}]: " choice
+        read -r -p "Выбор [${GRAY}$default_idx${RESET}]: " choice
         choice=${choice:-$default_idx}
         if [[ "$choice" =~ ^[0-9]+$ ]] && (( choice >= 1 && choice <= ${#options[@]} )); then
-            eval "$var_name=\"${options[$((choice - 1))]}\""
+            printf -v "$var_name" '%s' "${options[$((choice - 1))]}"
             return 0
         fi
         log_warn "введи номер от 1 до ${#options[@]}"
@@ -179,7 +180,7 @@ confirm_dangerous() {
     local message=$1
     echo ""
     echo "${YELLOW}${BOLD}⚠  $message${RESET}"
-    read -p "Точно продолжить? [yes/NO]: " answer
+    read -r -p "Точно продолжить? [yes/NO]: " answer
     if [[ "${answer,,}" != "yes" ]]; then
         log_warn "Отменено"
         return 1
@@ -211,9 +212,12 @@ ${BOLD}SSH:${RESET}
   Root login:      ${RED}отключается${RESET}
 
 ${BOLD}Админ-панель:${RESET}
+$(if ${INSTALL_PANEL:-true}; then cat <<EOL
   Bind:            ${GREEN}${PANEL_BIND:-127.0.0.1}:$PANEL_PORT${RESET}
   Логин:           ${GREEN}$PANEL_LOGIN${RESET}
   Пароль:          ${GREEN}*****${RESET} (захэширован)
+EOL
+else echo "  ${YELLOW}не устанавливается (режим без UI)${RESET}"; fi)
 
 ${BOLD}xray:${RESET}
   Установка:       ${GREEN}xray-core от XTLS${RESET}
@@ -229,6 +233,32 @@ EOF
 # Финальный отчёт после установки
 print_post_install_info() {
     local server_ip="${SERVER_IP:-<your-server-ip>}"
+
+    if ! ${INSTALL_PANEL:-true}; then
+        cat <<EOF
+
+${BOLD}${GREEN}╔════════════════════════════════════════════════════════════╗${RESET}
+${BOLD}${GREEN}║           Установка успешно завершена ✓                    ║${RESET}
+${BOLD}${GREEN}╚════════════════════════════════════════════════════════════╝${RESET}
+
+${BOLD}Сервер:${RESET}
+  IP:               ${CYAN}$server_ip${RESET}
+  SSH:              ${CYAN}ssh -p $SSH_PORT $ADMIN_USER@$server_ip${RESET}
+
+${BOLD}Веб-панель:${RESET} ${YELLOW}не устанавливалась (режим без UI)${RESET}
+
+${BOLD}Что дальше:${RESET}
+
+${CYAN}1.${RESET} Положи VLESS-конфиги в ${CYAN}/usr/local/etc/xray/conf.d/*.json${RESET}
+${CYAN}2.${RESET} ${CYAN}sudo systemctl restart xray${RESET}
+${CYAN}3.${RESET} Проверь здоровье: ${GRAY}xstat${RESET} / ${GRAY}xwatch${RESET}
+
+${BOLD}Состояние сервиса xray:${RESET}
+  xray установлен но ${YELLOW}не запущен${RESET} — ждёт конфиг в conf.d.
+
+EOF
+        return
+    fi
 
     cat <<EOF
 

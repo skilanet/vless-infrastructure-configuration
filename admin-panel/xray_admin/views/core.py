@@ -16,11 +16,12 @@ from ..config import ACCESS_LOG, ERROR_LOG
 from ..geo import geo_lookup
 from ..logs import (tail_file, parse_access_line, parse_error_line,
                     collect_recent_connections, aggregate_user_meta,
-                    aggregate_top_cities, read_connections_per_hour)
-from ..metrics import read_traffic_series, read_user_series
+                    aggregate_top_cities)
+from ..metrics import (read_traffic_series, read_user_series,
+                       read_connections_per_hour)
 from ..stats import get_xray_stats, get_inbound_stats, get_system_stats
 from ..state import (collect_inbounds, collect_users, collect_vless_inbounds,
-                     get_user_by_uuid, list_config_files,
+                     get_user_by_uuid, inbound_row, list_config_files,
                      read_config_file, write_config_file,
                      validate_email, validate_uuid)
 from ..system import (is_xray_active, systemctl, invalidate_xray_caches,
@@ -50,24 +51,7 @@ def dashboard():
     activity = read_activity()
     vless_inbounds = [ib for ib in inbounds if ib.get("protocol") == "vless"]
     top_cities = aggregate_top_cities(collect_recent_connections(limit=500))
-    inbound_rows = []
-    for ib in inbounds:
-        ss = ib.get("streamSettings", {}) or {}
-        rs = ss.get("realitySettings", {}) or {}
-        xs = ss.get("xhttpSettings", {}) or {}
-        sns = rs.get("serverNames") or []
-        is_service = ib.get("listen") == "127.0.0.1" or ib.get("protocol") != "vless"
-        inbound_rows.append({
-            "tag": ib.get("tag", "—"),
-            "port": ib.get("port"),
-            "proto": ib.get("protocol", "—"),
-            "transport": ss.get("network", "—"),
-            "mode": xs.get("mode"),
-            "sni": sns[0] if sns else None,
-            "clients": len((ib.get("settings") or {}).get("clients", [])),
-            "service": is_service,
-            "file": ib.get("_file", "—"),
-        })
+    inbound_rows = [inbound_row(ib) for ib in inbounds]
     return render_template("dashboard.html",
                            xray_active=is_xray_active(),
                            xray_version=xray_version(),
@@ -95,7 +79,11 @@ def dashboard():
 @login_required
 def users_list():
     q = request.args.get("q", "").strip().lower()
-    users = collect_users()
+    all_users = collect_users()
+    # фильтруем ДО подсчёта — иначе totals/avg считаются по всем, а делятся
+    # на отфильтрованное число юзеров → неверное среднее при поиске
+    users = ([u for u in all_users if q in u["email"].lower() or q in u["id"].lower()]
+             if q else all_users)
     stats = get_xray_stats()
     meta = aggregate_user_meta(collect_recent_connections(limit=500))
     total_up = total_down = 0
@@ -113,12 +101,10 @@ def users_list():
             online_count += 1
         total_up += u["uplink"]
         total_down += u["downlink"]
-    if q:
-        users = [u for u in users if q in u["email"].lower() or q in u["id"].lower()]
     avg = (total_up + total_down) // max(len(users), 1)
     return render_template("users.html",
                            users=users,
-                           total=len(collect_users()),
+                           total=len(all_users),
                            filtered=len(users),
                            online_count=online_count,
                            total_up=total_up,
@@ -142,6 +128,11 @@ def users_new():
             for u in collect_users():
                 if u["email"] == email:
                     raise ValueError(f"юзер с email «{email}» уже существует")
+                if u["id"] == uid:
+                    raise ValueError("этот UUID уже занят другим юзером")
+            # собираем все изменения в памяти, пишем одним проходом в конце —
+            # ошибка на середине не оставит конфиг полу-применённым
+            pending = []
             for f in list_config_files():
                 data = read_config_file(f)
                 modified = False
@@ -157,7 +148,11 @@ def users_new():
                     clients.append(client)
                     modified = True
                 if modified:
-                    write_config_file(f, data)
+                    pending.append((f, data))
+            # ponytail: всё ещё несколько write_config_file подряд — каждый атомарен,
+            # но межфайловой транзакции нет; полный 2PC не нужен для пары конфигов
+            for f, data in pending:
+                write_config_file(f, data)
             systemctl("restart")
             flash(f"юзер «{email}» создан", "success")
             push_activity("user", "Создан юзер", email)
@@ -187,10 +182,13 @@ def users_edit(uid: str):
             selected = request.form.getlist("inbounds")
             if not selected:
                 raise ValueError("выбери хотя бы один inbound")
+            old_uid = user["id"]
             for other in collect_users():
                 if other["id"] != uid and other["email"] == new_email:
                     raise ValueError(f"юзер с email «{new_email}» уже существует")
-            old_uid = user["id"]
+                if other["id"] != old_uid and other["id"] == new_uid:
+                    raise ValueError("этот UUID уже занят другим юзером")
+            pending = []
             for f in list_config_files():
                 data = read_config_file(f)
                 modified = False
@@ -218,7 +216,9 @@ def users_edit(uid: str):
                             clients.pop(existing_idx)
                             modified = True
                 if modified:
-                    write_config_file(f, data)
+                    pending.append((f, data))
+            for f, data in pending:
+                write_config_file(f, data)
             systemctl("restart")
             flash(f"юзер «{new_email}» обновлён", "success")
             push_activity("user", "Изменён юзер", new_email)

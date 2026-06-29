@@ -16,13 +16,20 @@ def read_outbounds() -> list[dict]:
     if not path.exists():
         return []
     data = read_config_file(path)
-    return data.get("outbounds", [])
+    # "_all_outbounds" — полный список (вкл. выключенные) для панели; xray его
+    # игнорирует. Fallback на "outbounds" для конфигов, записанных до этого ключа.
+    return data.get("_all_outbounds", data.get("outbounds", []))
 
 
 def write_outbounds(outbounds: list[dict]) -> None:
     path = outbounds_file_path()
-    data = read_config_file(path) if path.exists() else {"outbounds": []}
-    data["outbounds"] = outbounds
+    data = read_config_file(path) if path.exists() else {}
+    data["_all_outbounds"] = outbounds
+    # xray читает "outbounds": только включённые, без панельного ключа _enabled
+    data["outbounds"] = [
+        {k: v for k, v in o.items() if k != "_enabled"}
+        for o in outbounds if o.get("_enabled", True)
+    ]
     write_config_file(path, data)
 
 

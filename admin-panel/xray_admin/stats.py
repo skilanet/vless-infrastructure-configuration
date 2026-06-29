@@ -104,7 +104,7 @@ def get_xray_stats(reset: bool = False) -> dict[str, dict]:
         data = json.loads(out)
         result: dict[str, dict] = {}
         for s in data.get("stat", []):
-            parts = s["name"].split(">>>")
+            parts = s.get("name", "").split(">>>")
             if len(parts) >= 4:
                 email = parts[1]
                 direction = parts[3]
@@ -133,7 +133,7 @@ def get_inbound_stats() -> dict[str, dict]:
         data = json.loads(out)
         result: dict[str, dict] = {}
         for s in data.get("stat", []):
-            parts = s["name"].split(">>>")
+            parts = s.get("name", "").split(">>>")
             if len(parts) >= 4:
                 tag = parts[1]
                 direction = parts[3]

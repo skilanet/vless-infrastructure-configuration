@@ -29,7 +29,9 @@ if command -v ufw >/dev/null 2>&1 && ufw status | grep -q "Status: active"; then
 fi
 
 # === админ-панель работает ===
-if systemctl is-active xray-admin >/dev/null 2>&1; then
+if ! ${INSTALL_PANEL:-true}; then
+    log_info "веб-панель не устанавливалась (режим без UI)"
+elif systemctl is-active xray-admin >/dev/null 2>&1; then
     log_ok "xray-admin (панель) запущена"
     if ss -tlnp 2>/dev/null | grep -q ":$PANEL_PORT"; then
         log_ok "панель слушает на порту $PANEL_PORT"
@@ -58,6 +60,17 @@ if [[ -f "$STATE_FILE" ]] && grep -q "^export PANEL_PASSWORD=" "$STATE_FILE"; th
 fi
 chmod 600 "$STATE_FILE" 2>/dev/null || true
 
+# === Очистка установочного балласта ===
+# apt тащит .deb в /var/cache/apt/archives и оставляет их там; pip без
+# --no-cache-dir пишет кэш в HOME panel-юзера (/opt/xray-admin/.cache).
+# Ничего из этого не нужно работающему серверу.
+log_info "чищу установочный мусор..."
+apt-get autoremove -y -qq >/dev/null 2>&1 || true
+apt-get clean -qq >/dev/null 2>&1 || true
+# pip-кэш panel-юзера (HOME = /opt/xray-admin)
+rm -rf /opt/xray-admin/.cache 2>/dev/null || true
+log_ok "очистка завершена"
+
 log_ok "финализация завершена"
 
 # === Сохраняем итоговый отчёт ===
@@ -70,14 +83,23 @@ report_file="/root/vless-infrastructure-configuration-installed.txt"
     echo "Xray user:         $XRAY_USER"
     echo "Panel user:        $PANEL_USER"
     echo "SSH port:          $SSH_PORT"
-    echo "Panel port:        $PANEL_PORT"
-    echo "Panel login:       $PANEL_LOGIN"
-    echo ""
-    echo "=== Что дальше ==="
-    echo "1. ssh -p $SSH_PORT $ADMIN_USER@<server-ip>"
-    echo "2. Открой http://<server-ip>:$PANEL_PORT в браузере"
-    echo "3. Залогинься как $PANEL_LOGIN"
-    echo "4. Создай первый VLESS-инбаунд через UI"
+    if ${INSTALL_PANEL:-true}; then
+        echo "Panel port:        $PANEL_PORT"
+        echo "Panel login:       $PANEL_LOGIN"
+        echo ""
+        echo "=== Что дальше ==="
+        echo "1. ssh -p $SSH_PORT $ADMIN_USER@<server-ip>"
+        echo "2. Открой http://<server-ip>:$PANEL_PORT в браузере"
+        echo "3. Залогинься как $PANEL_LOGIN"
+        echo "4. Создай первый VLESS-инбаунд через UI"
+    else
+        echo "Веб-панель:        не установлена (режим без UI)"
+        echo ""
+        echo "=== Что дальше ==="
+        echo "1. ssh -p $SSH_PORT $ADMIN_USER@<server-ip>"
+        echo "2. Положи VLESS-конфиги в /usr/local/etc/xray/conf.d/*.json"
+        echo "3. sudo systemctl restart xray"
+    fi
     echo ""
     echo "Все скрипты установки: /opt/vless-infrastructure-configuration/"
     echo "Лог установки:         /var/log/vless-infrastructure-configuration-install.log"

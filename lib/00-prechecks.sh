@@ -23,7 +23,8 @@ source /etc/os-release
 case "${ID,,}" in
     ubuntu)
         version_major="${VERSION_ID%%.*}"
-        if (( version_major < 22 )); then
+        # пустой VERSION_ID → не считаем «слишком старой», (( "" < 22 )) дало бы false-fail
+        if [[ -n "$version_major" ]] && (( version_major < 22 )); then
             log_error "Ubuntu $VERSION_ID слишком старая, нужно 22.04+"
             exit 1
         fi
@@ -31,7 +32,7 @@ case "${ID,,}" in
         ;;
     debian)
         version_major="${VERSION_ID%%.*}"
-        if (( version_major < 11 )); then
+        if [[ -n "$version_major" ]] && (( version_major < 11 )); then
             log_error "Debian $VERSION_ID слишком старая, нужно 11+"
             exit 1
         fi

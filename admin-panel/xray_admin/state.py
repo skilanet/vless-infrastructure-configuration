@@ -6,6 +6,7 @@ import os
 import re
 import secrets
 import socket
+import tempfile
 import uuid as uuid_module
 from pathlib import Path
 
@@ -30,11 +31,18 @@ def read_config_file(path: Path) -> dict:
 
 
 def write_config_file(path: Path, data: dict) -> None:
-    tmp = path.with_suffix(".tmp")
-    with tmp.open("w") as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
-    tmp.replace(path)
-    os.chmod(path, 0o660)
+    # уникальное tmp-имя в той же директории → нет гонки двух воркеров;
+    # права ставим ДО replace, чтобы xray-демон не увидел файл с дефолтным umask
+    fd, tmp = tempfile.mkstemp(dir=str(path.parent), prefix=path.name + ".", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+            f.flush()
+            os.fchmod(f.fileno(), 0o660)
+        os.replace(tmp, path)
+    except BaseException:
+        os.unlink(tmp)
+        raise
 
 
 def find_inbound_by_tag(tag: str) -> tuple[Path, dict, int] | None:
@@ -58,6 +66,26 @@ def collect_inbounds() -> list[dict]:
 
 def collect_vless_inbounds() -> list[dict]:
     return [ib for ib in collect_inbounds() if ib.get("protocol") == "vless"]
+
+
+def inbound_row(ib: dict) -> dict:
+    """Сводная строка inbound'а для таблиц (dashboard + /inbounds)."""
+    ss = ib.get("streamSettings", {}) or {}
+    rs = ss.get("realitySettings", {}) or {}
+    xs = ss.get("xhttpSettings", {}) or {}
+    sns = rs.get("serverNames") or []
+    is_service = ib.get("listen") == "127.0.0.1" or ib.get("protocol") != "vless"
+    return {
+        "tag": ib.get("tag", "—"),
+        "port": ib.get("port"),
+        "proto": ib.get("protocol", "—"),
+        "transport": ss.get("network", "—"),
+        "mode": xs.get("mode"),
+        "sni": sns[0] if sns else None,
+        "clients": len((ib.get("settings") or {}).get("clients", [])),
+        "service": is_service,
+        "file": ib.get("_file", "—"),
+    }
 
 
 def collect_users() -> list[dict]:

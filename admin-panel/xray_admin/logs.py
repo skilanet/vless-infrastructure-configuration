@@ -143,27 +143,3 @@ def aggregate_top_cities(connections: list[dict], top_n: int = 5) -> list[dict]:
     items = sorted(counts.items(), key=lambda x: x[1], reverse=True)[:top_n]
     return [{"country": k[0], "city": k[1], "count": v,
              "flag": country_flag(k[0])} for k, v in items]
-
-
-def read_connections_per_hour(hours: int = 24) -> list[dict]:
-    conns = collect_recent_connections(limit=2000)
-    now = datetime.now()
-    cutoff = now - timedelta(hours=hours)
-    counts: dict[str, int] = {}
-    for c in conns:
-        try:
-            ts = datetime.strptime(c.get("ts", "").split(".")[0],
-                                   "%Y/%m/%d %H:%M:%S")
-        except ValueError:
-            continue
-        if ts < cutoff:
-            continue
-        bucket = ts.replace(minute=0, second=0, microsecond=0).isoformat()
-        counts[bucket] = counts.get(bucket, 0) + 1
-    out = []
-    for i in range(hours):
-        h = (now - timedelta(hours=hours - 1 - i)).replace(
-            minute=0, second=0, microsecond=0)
-        out.append({"hour": h.strftime("%H:%M"),
-                    "count": counts.get(h.isoformat(), 0)})
-    return out

@@ -16,14 +16,23 @@ def read_routing_rules() -> list[dict]:
     if not path.exists():
         return []
     data = read_config_file(path)
-    return data.get("routing", {}).get("rules", [])
+    # "_all_rules" — полный упорядоченный список (вкл. выключенные) для панели;
+    # xray его игнорирует. Fallback на routing.rules для старых конфигов.
+    return data.get("_all_rules", data.get("routing", {}).get("rules", []))
 
 
 def write_routing_rules(rules: list[dict], domain_strategy: str = "IPIfNonMatch") -> None:
     path = routing_file_path()
-    data = read_config_file(path) if path.exists() else {"routing": {}}
-    data.setdefault("routing", {})["domainStrategy"] = domain_strategy
-    data["routing"]["rules"] = rules
+    data = read_config_file(path) if path.exists() else {}
+    data["_all_rules"] = rules
+    routing = data.setdefault("routing", {})
+    routing["domainStrategy"] = domain_strategy
+    # xray читает routing.rules: только включённые, без панельного ключа _enabled.
+    # Порядок сохраняется — first-match не ломается при включении/выключении.
+    routing["rules"] = [
+        {k: v for k, v in r.items() if k != "_enabled"}
+        for r in rules if r.get("_enabled", True)
+    ]
     write_config_file(path, data)
 
 

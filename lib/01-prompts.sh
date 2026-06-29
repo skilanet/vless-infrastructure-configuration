@@ -87,59 +87,75 @@ save_state "SERVER_IP" "$SERVER_IP"
 # === Админ-панель ===
 echo ""
 log_info "Админ-панель"
-echo "Через панель ты создаёшь VLESS-инбаунды, юзеров, настраиваешь routing."
+echo "Веб-UI (Flask+gunicorn) для VLESS-инбаундов, юзеров, routing."
+echo "На слабых VPS её можно не ставить — xray настраивается правкой"
+echo "JSON в /usr/local/etc/xray/conf.d вручную."
 echo ""
-echo "Режимы доступа:"
-echo "  1) ${GREEN}localhost${RESET} (рекомендуется) — панель слушает на 127.0.0.1,"
-echo "     ходишь через SSH-туннель: ssh -L 8088:localhost:\$PANEL_PORT ..."
-echo "  2) public — панель открыта на 0.0.0.0 по HTTP. Опасно без TLS,"
-echo "     используй только если у тебя перед панелью reverse-proxy с TLS."
-echo ""
-prompt_list "Как открыть панель?" "localhost|public" 1 PANEL_EXPOSURE
-save_state "PANEL_EXPOSURE" "$PANEL_EXPOSURE"
+prompt_yesno "Установить веб-панель управления?" "y" INSTALL_PANEL
+save_state "INSTALL_PANEL" "$INSTALL_PANEL"
 
-if [[ "$PANEL_EXPOSURE" == "localhost" ]]; then
-    PANEL_BIND="127.0.0.1"
+if $INSTALL_PANEL; then
+    echo ""
+    echo "Режимы доступа:"
+    echo "  1) ${GREEN}localhost${RESET} (рекомендуется) — панель слушает на 127.0.0.1,"
+    echo "     ходишь через SSH-туннель: ssh -L 8088:localhost:\$PANEL_PORT ..."
+    echo "  2) public — панель открыта на 0.0.0.0 по HTTP. Опасно без TLS,"
+    echo "     используй только если у тебя перед панелью reverse-proxy с TLS."
+    echo ""
+    prompt_list "Как открыть панель?" "localhost|public" 1 PANEL_EXPOSURE
+    save_state "PANEL_EXPOSURE" "$PANEL_EXPOSURE"
+
+    if [[ "$PANEL_EXPOSURE" == "localhost" ]]; then
+        PANEL_BIND="127.0.0.1"
+    else
+        PANEL_BIND="0.0.0.0"
+        log_warn "панель будет открыта в интернет по HTTP — поставь reverse-proxy с TLS"
+    fi
+    save_state "PANEL_BIND" "$PANEL_BIND"
+
+    prompt_int "Порт админ-панели" 1024 65535 8088 PANEL_PORT
+    save_state "PANEL_PORT" "$PANEL_PORT"
+
+    echo ""
+    echo "Логин и пароль для входа в панель."
+    prompt_string "Логин админа панели" "admin" PANEL_LOGIN
+    save_state "PANEL_LOGIN" "$PANEL_LOGIN"
+
+    # Пароль читаем без эха.
+    # Сохраняем в state.env временно (нужен для модуля 18) — финализатор его
+    # затрёт после успешной установки. Файл state.env уже chmod 600.
+    while true; do
+        read -rs -p "${BOLD}Пароль (минимум 12 символов, нужны буквы и цифры)${RESET}: " panel_pwd
+        echo
+        if [[ ${#panel_pwd} -lt 12 ]]; then
+            log_warn "минимум 12 символов"
+            continue
+        fi
+        if ! [[ "$panel_pwd" =~ [A-Za-z] ]] || ! [[ "$panel_pwd" =~ [0-9] ]]; then
+            log_warn "пароль должен содержать буквы и цифры"
+            continue
+        fi
+        read -rs -p "${BOLD}Повтори пароль${RESET}: " panel_pwd2
+        echo
+        if [[ "$panel_pwd" != "$panel_pwd2" ]]; then
+            log_warn "пароли не совпадают"
+            continue
+        fi
+        PANEL_PASSWORD="$panel_pwd"
+        save_state "PANEL_PASSWORD" "$PANEL_PASSWORD"
+        unset panel_pwd panel_pwd2
+        log_ok "пароль принят"
+        break
+    done
 else
-    PANEL_BIND="0.0.0.0"
-    log_warn "панель будет открыта в интернет по HTTP — поставь reverse-proxy с TLS"
+    # Панель не ставим, но downstream-модули (13-firewall, 19-finalize,
+    # print_*) под set -u читают эти переменные — даём безопасные дефолты.
+    # PANEL_BIND=127.0.0.1 → firewall не откроет порт наружу.
+    save_state "PANEL_BIND" "127.0.0.1"
+    save_state "PANEL_PORT" ""
+    save_state "PANEL_LOGIN" ""
+    log_info "веб-панель пропущена — xray настраивается вручную через conf.d"
 fi
-save_state "PANEL_BIND" "$PANEL_BIND"
-
-prompt_int "Порт админ-панели" 1024 65535 8088 PANEL_PORT
-save_state "PANEL_PORT" "$PANEL_PORT"
-
-echo ""
-echo "Логин и пароль для входа в панель."
-prompt_string "Логин админа панели" "admin" PANEL_LOGIN
-save_state "PANEL_LOGIN" "$PANEL_LOGIN"
-
-# Пароль читаем без эха.
-# Сохраняем в state.env временно (нужен для модуля 18) — финализатор его
-# затрёт после успешной установки. Файл state.env уже chmod 600.
-while true; do
-    read -rs -p "${BOLD}Пароль (минимум 12 символов, нужны буквы и цифры)${RESET}: " panel_pwd
-    echo
-    if [[ ${#panel_pwd} -lt 12 ]]; then
-        log_warn "минимум 12 символов"
-        continue
-    fi
-    if ! [[ "$panel_pwd" =~ [A-Za-z] ]] || ! [[ "$panel_pwd" =~ [0-9] ]]; then
-        log_warn "пароль должен содержать буквы и цифры"
-        continue
-    fi
-    read -rs -p "${BOLD}Повтори пароль${RESET}: " panel_pwd2
-    echo
-    if [[ "$panel_pwd" != "$panel_pwd2" ]]; then
-        log_warn "пароли не совпадают"
-        continue
-    fi
-    PANEL_PASSWORD="$panel_pwd"
-    save_state "PANEL_PASSWORD" "$PANEL_PASSWORD"
-    unset panel_pwd panel_pwd2
-    log_ok "пароль принят"
-    break
-done
 
 # === Доп. опции ===
 echo ""

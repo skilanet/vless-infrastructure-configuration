@@ -1,11 +1,13 @@
 """xray-admin: Flask application factory."""
 from __future__ import annotations
 
+import secrets
 import socket
 import time
+from datetime import timedelta
 from pathlib import Path
 
-from flask import Flask, session
+from flask import Flask, abort, request, session
 
 from .activity import read_activity  # noqa: F401  (used by views)
 from .alerts import load_alerts_state
@@ -26,8 +28,30 @@ def create_app() -> Flask:
         static_folder=str(Path(__file__).parent.parent / "static"),
     )
     app.secret_key = panel_config["secret_key"]
+    app.config["SESSION_COOKIE_HTTPONLY"] = True
+    app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+    app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(hours=12)
+    # ponytail: no Secure flag — panel may be served over plain HTTP on LAN;
+    # set SESSION_COOKIE_SECURE=True here once it's strictly behind HTTPS.
 
     register_blueprints(app)
+
+    def _csrf_token() -> str:
+        tok = session.get("_csrf")
+        if not tok:
+            tok = secrets.token_urlsafe(32)
+            session["_csrf"] = tok
+        return tok
+
+    app.jinja_env.globals["csrf_token"] = _csrf_token
+
+    @app.before_request
+    def _csrf_protect():
+        if request.method == "POST":
+            good = session.get("_csrf")
+            sent = request.form.get("_csrf") or request.headers.get("X-CSRFToken", "")
+            if not good or not secrets.compare_digest(sent, good):
+                abort(400)
 
     static_css = Path(app.static_folder) / "style.css"
 

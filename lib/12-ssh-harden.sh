@@ -20,18 +20,28 @@ fi
 # Создаём drop-in директорию для наших настроек
 mkdir -p /etc/ssh/sshd_config.d
 
+# Password auth отключаем ТОЛЬКО если есть ssh-ключ. Иначе (юзер пропустил
+# ключ) ADMIN_USER создан без пароля + root off + password off = полный замок,
+# после рестарта sshd зайти нельзя ничем.
+if [[ -n "${SSH_PUBLIC_KEY:-}" ]]; then
+    PASSWORD_AUTH="no"
+else
+    PASSWORD_AUTH="yes"
+    log_warn "ssh-ключ не задан — PasswordAuthentication остаётся yes (иначе lockout)"
+fi
+
 # Наш drop-in
 cat > /etc/ssh/sshd_config.d/99-vless-infrastructure-configuration.conf <<EOF
 # Настройки от vless-infrastructure-configuration installer
 # Изменения:
 # - порт сменён на $SSH_PORT (если CHANGE_SSH_PORT=true)
 # - root login отключён
-# - password auth отключён (вход только по ключу)
+# - password auth отключён только при наличии ssh-ключа (иначе lockout)
 # - keepalive против троттлинга РКН
 
 Port $SSH_PORT
 PermitRootLogin no
-PasswordAuthentication no
+PasswordAuthentication $PASSWORD_AUTH
 PubkeyAuthentication yes
 ChallengeResponseAuthentication no
 UsePAM yes
@@ -103,7 +113,7 @@ else
 fi
 
 # Проверяем что sshd слушает на новом порту
-if ss -tlnp | grep -q ":$SSH_PORT"; then
+if ss -tlnp | grep -qE ":${SSH_PORT}([[:space:]]|$)"; then
     log_ok "sshd слушает на порту $SSH_PORT"
 else
     log_error "sshd не слушает на $SSH_PORT — возможно проблема"

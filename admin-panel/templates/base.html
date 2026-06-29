@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>{% block title %}xray-admin{% endblock %}</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -126,6 +127,30 @@
     </div>
 {% endif %}
 
+<script>
+// CSRF: inject token into POST forms and same-origin mutating fetch() calls.
+(function () {
+    var CSRF = document.querySelector('meta[name=csrf-token]').content;
+    document.addEventListener('submit', function (e) {
+        var f = e.target;
+        if (f.method && f.method.toLowerCase() === 'post' &&
+            !f.querySelector('input[name=_csrf]')) {
+            var i = document.createElement('input');
+            i.type = 'hidden'; i.name = '_csrf'; i.value = CSRF;
+            f.appendChild(i);
+        }
+    }, true);
+    var _fetch = window.fetch;
+    window.fetch = function (url, opts) {
+        opts = opts || {};
+        var m = (opts.method || 'GET').toUpperCase();
+        if (m !== 'GET' && m !== 'HEAD') {
+            opts.headers = Object.assign({}, opts.headers, {'X-CSRFToken': CSRF});
+        }
+        return _fetch(url, opts);
+    };
+})();
+</script>
 {% block scripts %}{% endblock %}
 </body>
 </html>
