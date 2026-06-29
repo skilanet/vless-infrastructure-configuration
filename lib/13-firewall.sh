@@ -26,10 +26,12 @@ remove_rules_with_comment() {
         # gawk-only 3-arg match() ломается на mawk (дефолт Debian/Ubuntu),
         # поэтому фильтруем grep'ом и вытаскиваем номер sed'ом — portable.
         local idx
+        # || true: на свежем сервере grep не находит правил и возвращает 1,
+        # из-за pipefail весь конвейер падает и set -e убивает модуль.
         idx=$(ufw status numbered 2>/dev/null \
               | grep -E "$comment_pattern" \
               | sed -n 's/^\[ *\([0-9]\+\).*/\1/p' \
-              | sort -rn | head -1)
+              | sort -rn | head -1) || true
         [[ -z "$idx" ]] && break
         yes | ufw delete "$idx" >/dev/null 2>&1 || break
     done
